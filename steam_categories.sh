@@ -1,7 +1,7 @@
 #!/bin/bash
 
-rm -rf /var/tmp/steam_cats/
-mkdir /var/tmp/steam_cats/
+rm -rf /var/tmp/steamy_cats/
+mkdir /var/tmp/steamy_cats/
 
 # Reads from a filename passed to it
 # No arguments available, just outputs something Bash can handle instead of VDF
@@ -20,13 +20,13 @@ for i in $(head -n "$END_APPS" "$1" | tail -$COUNT_LINES | grep -n $'^\t\t\t\t\t
 do
 	let START_SPOT=$i+$BEGIN_APPS
 	let END_SPOT=$i-$PREV_LINE
-	head -n "$START_SPOT" "$1" | tail -"$END_SPOT" > /var/tmp/steam_cats/"$PREV_LINE"
+	head -n "$START_SPOT" "$1" | tail -"$END_SPOT" > /var/tmp/steamy_cats/"$PREV_LINE"
 	PREV_LINE=$i
 done
 
 # Catching the last game, since the for loop cannot
 let END_SPOT=$END_APPS-$i-$BEGIN_APPS
-head -n "$END_APPS" "$1" | tail -"$END_SPOT" > /var/tmp/steam_cats/"$PREV_LINE"
+head -n "$END_APPS" "$1" | tail -"$END_SPOT" > /var/tmp/steamy_cats/"$PREV_LINE"
 
 # Removing the file that can't possibly have anything in it
-rm /var/tmp/steam_cats/0
+rm /var/tmp/steamy_cats/0
