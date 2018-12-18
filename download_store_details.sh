@@ -1,7 +1,23 @@
 #!/bin/bash
 
+if [ "$1" == "--front" ]
+then
+	DLOC="$HOME/.local/share/steam_store_frontend/"
+	TLOC="https://store.steampowered.com/app/"
+elif [ "$1" == "--api" ]
+then
+	TLOC="https://store.steampowered.com/api/appdetails/?appids="
+	DLOC="$HOME/.local/share/steam_store_api_json/"
+else
+	echo "This script takes one argument."
+	echo "Supply --front for frontend download or --api for API"
+	exit
+fi
+
+mkdir -p "$DLOC"
+
 NUMGAMES=$(find /var/tmp/steamy_cats/* | wc -l)
-GAMESGOTTEN=$(find ~/.local/share/steam_store_api_json/* | wc -l)
+GAMESGOTTEN=$(find "$DLOC"* | wc -l)
 echo "You have $NUMGAMES games that we are processing."
 echo "There are $GAMESGOTTEN files already existing that we won't redownload."
 echo "Expect 1 second per file download, since this is the rate limit Valve imposes."
@@ -9,23 +25,21 @@ echo
 
 let NUMEXISTS=0
 
-mkdir -p ~/.local/share/steam_store_api_json/
-
 GAMEPROCESSED=0
 
 for i in /var/tmp/steamy_cats/*
 do 
 	let GAMEPROCESSED=$GAMEPROCESSED+1
 	APPID=$(head -n1 "$i" | cut -d\" -f2)
-	DOWNLOAD_TAR="https://store.steampowered.com/api/appdetails/?appids=$APPID"
-	if [ ! -e ~/.local/share/steam_store_api_json/"$APPID".html ]
+	DOWNLOAD_TAR="$TLOC$APPID"
+	if [ ! -e "$DLOC""$APPID".html ]
 	then
 		if [ "$EXISTS" == "true" ]
 		then
 			EXISTS="false"
 			echo
 		fi
-		curl -s -o ~/.local/share/steam_store_api_json/"$APPID".html "$DOWNLOAD_TAR"
+		curl -s -o "$DLOC""$APPID".html "$DOWNLOAD_TAR"
 		tput cuu 1 && tput el # Using this to overwrite previous line
 		echo "Downloading file number: $GAMEPROCESSED"
 	else
@@ -41,9 +55,10 @@ do
 		EXISTS=true
 		continue
 	fi
-	sleep 1
+	sleep .2
 done
 
 # jq '.[] | .data.categories' ./30.html
 # grep -o "\"linux\":true" * | wc -l
 # grep -o "\"linux\":false" * | wc -l
+# grep -A1 InitAppTagModal ./281990.html | tail -1 | jq '.[] | .name' 2> /dev/null | cut -d\" -f2
