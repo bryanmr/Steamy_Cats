@@ -16,12 +16,23 @@ cd /var/tmp/steamy_cats/ || exit
 #for i in ~/.local/share/steam_store_api_json/*
 for i in *
 do
+	if [ ! -e "$HOME"/.local/share/steam_store_api_json/"$i".html ]
+	then
+		rm -f /var/tmp/steam_cats/"$i"
+		echo "Game not available on the store, ID $i so we are skipping"
+		continue
+	fi
 	#STEAMY_ID=$(echo "$i" | rev | cut -d/ -f1 | rev | cut -d. -f1)
 	let VALNUM=0
 	CATS=$(jq '.[] | .data.categories' "$HOME/.local/share/steam_store_api_json/$i.html" | grep description | cut -d\" -f4)
 	echo "$CATS" | while read -r line
 	do
-		printf "\t\t\t\t\t\t\t\"%s\"\t\t\"%s\"\n" "$VALNUM" "$line" >> /var/tmp/steamy_cats/"$i"
+		if [ "$line" == "" ]
+		then
+			printf "\t\t\t\t\t\t\t\"%s\"\t\t\"%s\"\n" "$VALNUM" "No Flags" >> /var/tmp/steamy_cats/"$i"
+		else
+			printf "\t\t\t\t\t\t\t\"%s\"\t\t\"%s\"\n" "$VALNUM" "$line" >> /var/tmp/steamy_cats/"$i"
+		fi
 		let VALNUM=$VALNUM+1
 	done
 
