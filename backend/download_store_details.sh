@@ -31,7 +31,6 @@ for i in /var/tmp/steamy_cats/*
 do 
 	let GAMEPROCESSED=$GAMEPROCESSED+1
 	APPID=$(head -n1 "$i" | cut -d\" -f2)
-	DOWNLOAD_TAR="$TLOC$APPID"
 	if [ ! -e "$DLOC""$APPID".html ]
 	then
 		if [ "$EXISTS" == "true" ]
@@ -39,7 +38,7 @@ do
 			EXISTS="false"
 			echo
 		fi
-		curl -s -o "$DLOC""$APPID".html "$DOWNLOAD_TAR"
+		curl -s -o "$DLOC""$APPID".html "$TLOC$APPID"
 		tput cuu 1 && tput el # Using this to overwrite previous line
 		echo "Downloading file number: $GAMEPROCESSED"
 	else

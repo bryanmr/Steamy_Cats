@@ -31,7 +31,7 @@ do
 		then
 			printf "\t\t\t\t\t\t\t\"%s\"\t\t\"%s\"\n" "$VALNUM" "No Flags" >> /var/tmp/steamy_cats/"$i"
 		else
-			printf "\t\t\t\t\t\t\t\"%s\"\t\t\"%s\"\n" "$VALNUM" "$line" >> /var/tmp/steamy_cats/"$i"
+			printf "\t\t\t\t\t\t\t\"%s\"\t\t\"FLAGS %s\"\n" "$VALNUM" "$line" >> /var/tmp/steamy_cats/"$i"
 		fi
 		let VALNUM=$VALNUM+1
 	done
@@ -42,8 +42,12 @@ do
 	else
 		printf "\t\t\t\t\t\t\t\"%s\"\t\t\"Not Native\"\n" "100" >> /var/tmp/steamy_cats/"$i"
 	fi
-	printf "\t\t\t\t\t\t}\n" >> /var/tmp/steamy_cats/"$i"
-	printf "\t\t\t\t\t}\n" >> /var/tmp/steamy_cats/"$i"
+
+	{
+		printf "\t\t\t\t\t\t\t\"%s\"\t\t\"All\"\n" "101"
+		printf "\t\t\t\t\t\t}\n"
+		printf "\t\t\t\t\t}\n"
+	} >> /var/tmp/steamy_cats/"$i"
 
 #	# Logic eventually for when the category retain option is added
 #	echo /var/tmp/steamy_cats/"$STEAMY_ID"
