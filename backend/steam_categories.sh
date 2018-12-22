@@ -17,6 +17,8 @@ let COUNT_LINES=COUNT_LINES-2
 
 PREV_LINE=0
 
+echo "Begin processing $COUNT_LINES lines of configuration in $1"
+
 for i in $(head -n "$END_APPS" "$1" | tail -$COUNT_LINES | grep -n $'^\t\t\t\t\t\"' | cut -d: -f1)
 do
 	if [ "$PREV_LINE" == "0" ]

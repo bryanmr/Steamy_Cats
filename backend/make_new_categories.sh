@@ -13,6 +13,8 @@
 
 cd /var/tmp/steamy_cats/ || exit
 
+echo "Adding new category tags to the games!"
+
 #for i in ~/.local/share/steam_store_api_json/*
 for i in *
 do

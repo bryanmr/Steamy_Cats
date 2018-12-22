@@ -2,10 +2,12 @@
 
 if [ "$1" == "--front" ]
 then
+	EXITMESSAGE="Steam Store User Readable Page"
 	DLOC="$HOME/.local/share/steam_store_frontend/"
 	TLOC="https://store.steampowered.com/app/"
 elif [ "$1" == "--api" ]
 then
+	EXITMESSAGE="Steam Store API"
 	TLOC="https://store.steampowered.com/api/appdetails/?appids="
 	DLOC="$HOME/.local/share/steam_store_api_json/"
 else
@@ -21,10 +23,9 @@ GAMESGOTTEN=$(find "$DLOC"* | wc -l)
 echo "You have $NUMGAMES games that we are processing."
 echo "There are $GAMESGOTTEN files already existing that we won't redownload."
 echo "Expect 1 second per file download, since this is the rate limit Valve imposes."
-echo
 
 let NUMEXISTS=0
-
+EXISTS=false
 GAMEPROCESSED=0
 
 for i in /var/tmp/steamy_cats/*
@@ -36,6 +37,7 @@ do
 		if [ "$EXISTS" == "true" ]
 		then
 			EXISTS="false"
+			echo "We found $NUMEXISTS files so far. Starting downloads of new files now."
 			echo
 		fi
 		curl -s -o "$DLOC""$APPID".html "$TLOC$APPID"
@@ -45,17 +47,17 @@ do
 		let NUMEXISTS=$NUMEXISTS+1
 		if [ "$EXISTS" == "false" ]
 		then
-			echo "Download already exists, there have been $NUMEXISTS others so far."
-			echo
+			echo "Processing list of existing files saved."
+			EXISTS=true
+			continue
 		else
-			tput cuu 1 && tput el # Using this to overwrite previous line
-			echo "$NUMEXISTS files already existing, not redownloading."
+			continue
 		fi
-		EXISTS=true
-		continue
 	fi
 	sleep .2
 done
+
+echo "Downloads complete for the $EXITMESSAGE."
 
 # jq '.[] | .data.categories' ./30.html
 # grep -o "\"linux\":true" * | wc -l
