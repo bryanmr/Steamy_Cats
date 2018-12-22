@@ -1,60 +1,58 @@
 #!/bin/bash
 
-# mkdir -p /var/tmp/steamy_cats_api_raw/
-# 
-# for i in ~/.local/share/steam_store_api_json/*
-# do
-# 	STEAMY_ID=$(echo "$i" | rev | cut -d/ -f1 | rev | cut -d. -f1)
-# 	jq '.[] | .data.categories' "$i" | grep description | cut -d\" -f4 > /var/tmp/steamy_cats_api_raw/"$STEAMY_ID"
-# done
-
-# for i in *; do echo $i; cat $i | grep -v -e \{ -e \} -e tags -e LastPlayed -e cloudenabled -e Hidden -e category -e preloadsell; echo ----; done | less
-# for i in *; do echo $i; cat $i | grep -B 100 $'^\t\t\t\t\t\t{' ; echo ----; done | less
-
 cd /var/tmp/steamy_cats/ || exit
 
 echo "Adding new category tags to the games!"
 
-#for i in ~/.local/share/steam_store_api_json/*
 for i in *
 do
-	if [ ! -e "$HOME"/.local/share/steam_store_api_json/"$i".html ]
-	then
-		rm -f /var/tmp/steam_cats/"$i"
-		echo "Game not available on the store, ID $i so we are skipping"
-		continue
-	fi
-	#STEAMY_ID=$(echo "$i" | rev | cut -d/ -f1 | rev | cut -d. -f1)
-	let VALNUM=0
+	let VALNUM=100
 	CATS=$(jq '.[] | .data.categories' "$HOME/.local/share/steam_store_api_json/$i.html" | grep description | cut -d\" -f4)
 	echo "$CATS" | while read -r line
 	do
 		if [ "$line" == "" ]
 		then
-			printf "\t\t\t\t\t\t\t\"%s\"\t\t\"%s\"\n" "$VALNUM" "No Flags" >> /var/tmp/steamy_cats/"$i"
+			printf "\t\t\t\t\t\t\t\"%s\"\t\t\"%s\"\n" "$VALNUM" "FLAGS NONE" >> /var/tmp/steamy_cats/"$i"
 		else
 			printf "\t\t\t\t\t\t\t\"%s\"\t\t\"FLAGS %s\"\n" "$VALNUM" "$line" >> /var/tmp/steamy_cats/"$i"
 		fi
 		let VALNUM=$VALNUM+1
 	done
 
+	# This is basically the same as the flags above, but making it a function complicates things a bit IMO
+	let VALNUM=200
+	TAGS=$(grep -A1 InitAppTagModal "$HOME/.local/share/steam_store_frontend/$i.html" | tail -1 | jq '.[] | .name' 2> /dev/null | cut -d\" -f2)
+	echo "$TAGS" | while read -r line
+        do
+                if [ "$line" == "" ]
+                then
+                        printf "\t\t\t\t\t\t\t\"%s\"\t\t\"%s\"\n" "$VALNUM" "TAGS NONE" >> /var/tmp/steamy_cats/"$i"
+                else
+                        printf "\t\t\t\t\t\t\t\"%s\"\t\t\"TAGS %s\"\n" "$VALNUM" "$line" >> /var/tmp/steamy_cats/"$i"
+                fi
+                let VALNUM=$VALNUM+1
+        done
+
 	if grep -q '"linux":true' "$HOME/.local/share/steam_store_api_json/$i.html"
 	then
-		printf "\t\t\t\t\t\t\t\"%s\"\t\t\"Linux Native\"\n" "100" >> /var/tmp/steamy_cats/"$i"
-	else
-		printf "\t\t\t\t\t\t\t\"%s\"\t\t\"Not Native\"\n" "100" >> /var/tmp/steamy_cats/"$i"
+		printf "\t\t\t\t\t\t\t\"%s\"\t\t\"APP NATIVE\"\n" "300" >> /var/tmp/steamy_cats/"$i"
 	fi
 
-	{
-		printf "\t\t\t\t\t\t\t\"%s\"\t\t\"All\"\n" "101"
-		printf "\t\t\t\t\t\t}\n"
-		printf "\t\t\t\t\t}\n"
-	} >> /var/tmp/steamy_cats/"$i"
-
-#	# Logic eventually for when the category retain option is added
-#	echo /var/tmp/steamy_cats/"$STEAMY_ID"
-#	if [ "$(wc -l /var/tmp/steamy_cats/"$STEAMY_ID" | awk '{ print $1 }')" -gt 2 ]
-#	then
-#		tail -n -1 /var/tmp/steamy_cats/"$STEAMY_ID" | cut -d\" -f2
-#	fi
+	if grep -q $'\t\t\t\t\t"Hidden"\t\t"1"' /var/tmp/steamy_cats/"$i"
+	then
+		grep -hv $'\t\t\t\t\t"Hidden"' /var/tmp/steamy_cats/"$i" > /var/tmp/Steamy_Cats_Rewrite
+		cp /var/tmp/Steamy_Cats_Rewrite /var/tmp/steamy_cats/"$i"
+		{
+                        printf "\t\t\t\t\t\t\t\"%s\"\t\t\"ALL\"\n" "301"
+                        printf "\t\t\t\t\t\t}\n"
+			printf "\t\t\t\t\t\t\"Hidden\"\t\t\"1\"\n"
+                        printf "\t\t\t\t\t}\n"
+                } >> /var/tmp/steamy_cats/"$i"
+	else
+		{
+			printf "\t\t\t\t\t\t\t\"%s\"\t\t\"ALL\"\n" "301"
+			printf "\t\t\t\t\t\t}\n"
+			printf "\t\t\t\t\t}\n"
+		} >> /var/tmp/steamy_cats/"$i"
+	fi
 done

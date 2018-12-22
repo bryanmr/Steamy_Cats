@@ -34,5 +34,3 @@ fi
 
 echo "If you are happy with this, run the below command:"
 echo "cp /var/tmp/newconfig.vdf $OUR_CONFIG"
-
-# ~/.steam/steam/userdata/*/config/localconfig.vdf
