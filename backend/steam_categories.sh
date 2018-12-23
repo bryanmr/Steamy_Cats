@@ -13,16 +13,16 @@ let END_APPS=$(grep -n $'^\t\t\t\t}' "$1" | cut -d: -f1 | head -n1)-1
 # Fixing the count here
 let COUNT_LINES=END_APPS-BEGIN_APPS+1
 
-grep -A1000000 '"Apps"' ~/.steam/steam/userdata/42653842/config/localconfig.vdf | awk 'NR==1,/^\t\t\t\t}$/' | grep $'^\t\t\t\t\t"' | cut -d\" -f2 | \
-	while read -r line
-	do
-		{
-			printf "\t\t\t\t\t\"%s\"\n" "$line"
-			printf "\t\t\t\t\t{\n"
-			printf "\t\t\t\t\t\t\"%s\"\n" "tags"
-			printf "\t\t\t\t\t\t{\n"
-		} > /var/tmp/steamy_cats/"$line"
-	done
+#grep -A1000000 '"Apps"' ~/.steam/steam/userdata//config/localconfig.vdf | awk 'NR==1,/^\t\t\t\t}$/' | grep $'^\t\t\t\t\t"' | cut -d\" -f2 | \
+#	while read -r line
+#	do
+#		{
+#			printf "\t\t\t\t\t\"%s\"\n" "$line"
+#			printf "\t\t\t\t\t{\n"
+#			printf "\t\t\t\t\t\t\"%s\"\n" "tags"
+#			printf "\t\t\t\t\t\t{\n"
+#		} > /var/tmp/steamy_cats/"$line"
+#	done
 
 echo "Begin processing $COUNT_LINES lines of configuration in $1"
 
@@ -61,3 +61,5 @@ do
 	copyexisting "$game" &
 done
 wait
+
+# config/loginusers.vdf
