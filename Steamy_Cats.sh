@@ -26,7 +26,7 @@ then
 	exit
 fi
 
-./backend/steam_categories.sh "$OUR_CONFIG"
+./backend/steam_categories.sh "$OUR_CONFIG" || exit
 ./backend/download_store_details.sh --front
 ./backend/download_store_details.sh --api
 ./backend/make_new_categories.sh "$OUR_CONFIG"

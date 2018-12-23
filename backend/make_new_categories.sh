@@ -38,14 +38,15 @@ do
 		printf "\t\t\t\t\t\t\t\"%s\"\t\t\"APP NATIVE\"\n" "300" >> /var/tmp/steamy_cats/"$i"
 	fi
 
-	if grep -q $'\t\t\t\t\t"Hidden"\t\t"1"' /var/tmp/steamy_cats/"$i"
+	if grep -q $'\t\t\t\t\t"Hidden"\t\t"' /var/tmp/steamy_cats/"$i"
 	then
+		HIDDENLINE=$(grep $'\t\t\t\t\t"Hidden"' /var/tmp/steamy_cats/"$i")
 		grep -hv $'\t\t\t\t\t"Hidden"' /var/tmp/steamy_cats/"$i" > /var/tmp/Steamy_Cats_Rewrite
 		cp /var/tmp/Steamy_Cats_Rewrite /var/tmp/steamy_cats/"$i"
 		{
                         printf "\t\t\t\t\t\t\t\"%s\"\t\t\"ALL\"\n" "301"
                         printf "\t\t\t\t\t\t}\n"
-			printf "\t\t\t\t\t\t\"Hidden\"\t\t\"1\"\n"
+			echo "$HIDDENLINE"
                         printf "\t\t\t\t\t}\n"
                 } >> /var/tmp/steamy_cats/"$i"
 	else
