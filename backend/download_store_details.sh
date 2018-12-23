@@ -28,10 +28,11 @@ let NUMEXISTS=0
 EXISTS=false
 GAMEPROCESSED=0
 
-for i in /var/tmp/steamy_cats/*
+cd /var/tmp/steamy_cats || exit
+for i in *
 do 
 	let GAMEPROCESSED=$GAMEPROCESSED+1
-	APPID=$(head -n1 "$i" | cut -d\" -f2)
+	APPID=$i
 	if [ ! -e "$DLOC""$APPID".html ]
 	then
 		if [ "$EXISTS" == "true" ]
