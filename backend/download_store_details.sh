@@ -22,11 +22,11 @@ NUMGAMES=$(find /var/tmp/steamy_cats/* | wc -l)
 GAMESGOTTEN=$(find "$DLOC"* | wc -l)
 echo "You have $NUMGAMES games that we are processing."
 echo "There are $GAMESGOTTEN files already existing that we won't redownload."
-echo "Expect 1 second per file download, since this is the rate limit Valve imposes."
+echo "Starting downloads!"
 
 let NUMEXISTS=0
-EXISTS=false
-GAMEPROCESSED=0
+let GAMEPROCESSED=0
+let DOWNLOADED=0
 
 cd /var/tmp/steamy_cats || exit
 for i in *
@@ -35,25 +35,15 @@ do
 	APPID=$i
 	if [ ! -e "$DLOC""$APPID".html ]
 	then
-		if [ "$EXISTS" == "true" ]
-		then
-			EXISTS="false"
-			echo "We found $NUMEXISTS files so far. Starting downloads of new files now."
-			echo
-		fi
 		curl -s -o "$DLOC""$APPID".html "$TLOC$APPID"
+		let DOWNLOADED=$GAMEPROCESSED-$NUMEXISTS
 		tput cuu 1 && tput el # Using this to overwrite previous line
-		echo "Downloading file number: $GAMEPROCESSED"
+		echo "Downloaded: $DOWNLOADED ~~ Existing: $NUMEXISTS"
 	else
 		let NUMEXISTS=$NUMEXISTS+1
-		if [ "$EXISTS" == "false" ]
-		then
-			echo "Processing list of existing files saved."
-			EXISTS=true
-			continue
-		else
-			continue
-		fi
+		tput cuu 1 && tput el # Using this to overwrite previous line
+		echo "Downloaded: $DOWNLOADED ~~ Existing: $NUMEXISTS"
+		continue
 	fi
 	sleep .2
 done

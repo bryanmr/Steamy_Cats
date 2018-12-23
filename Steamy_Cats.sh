@@ -11,8 +11,11 @@ done
 
 read -rp "Who do you want to use? Answer: " WHICHSTEAM
 
-echo -n "We are using: "
-echo "$NAMES" | sed -n "$WHICHSTEAM"p
+WHICHACC=$(echo "$NAMES" | sed -n "$WHICHSTEAM"p)
+WEBACCNUM=$(grep -B3 "$WHICHACC" ~/.steam/steam/config/loginusers.vdf | head -n1 | cut -d\" -f2)
+echo "$WEBACCNUM" > /var/tmp/Steamy_Cats_ACCNUM
+
+echo "We are using: $WHICHACC :: $WEBACCNUM"
 
 WHICH_CONFIG=$(grep PersonaName ~/.steam/steam/userdata/*/config/localconfig.vdf | sed -n 2p | cut -d: -f1)
 let COUNT_SLASHES=$(echo "$WHICH_CONFIG" | grep -o "/" | wc -l)-1

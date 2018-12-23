@@ -13,16 +13,23 @@ let END_APPS=$(grep -n $'^\t\t\t\t}' "$1" | cut -d: -f1 | head -n1)-1
 # Fixing the count here
 let COUNT_LINES=END_APPS-BEGIN_APPS+1
 
-#grep -A1000000 '"Apps"' ~/.steam/steam/userdata//config/localconfig.vdf | awk 'NR==1,/^\t\t\t\t}$/' | grep $'^\t\t\t\t\t"' | cut -d\" -f2 | \
-#	while read -r line
-#	do
-#		{
-#			printf "\t\t\t\t\t\"%s\"\n" "$line"
-#			printf "\t\t\t\t\t{\n"
-#			printf "\t\t\t\t\t\t\"%s\"\n" "tags"
-#			printf "\t\t\t\t\t\t{\n"
-#		} > /var/tmp/steamy_cats/"$line"
-#	done
+# Download the Community Profile
+echo "Downloading your community profile, if public, and then getting full list of games you own"
+curl -s -o /var/tmp/Steamy_Cats_Community_Profile https://steamcommunity.com/profiles/"$(cat /var/tmp/Steamy_Cats_ACCNUM)"/games/?tab=all
+
+# Find the JSON containing our games, then extract the APP ID with JQ
+grep "var rgGames" /var/tmp/Steamy_Cats_Community_Profile | \
+	sed -e 's/var rgGames \= \[//' -e 's/\]\;//' -e 's/\,[{]/\n\{/g' | jq '.appid' | \
+	while read -r appid
+	do
+		{
+                       printf "\t\t\t\t\t\"%s\"\n" "$appid"
+                       printf "\t\t\t\t\t{\n"
+                       printf "\t\t\t\t\t\t\"%s\"\n" "tags"
+                       printf "\t\t\t\t\t\t{\n"
+               } > /var/tmp/steamy_cats/"$appid"
+
+	done
 
 echo "Begin processing $COUNT_LINES lines of configuration in $1"
 
