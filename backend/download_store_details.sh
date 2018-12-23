@@ -17,6 +17,7 @@ else
 fi
 
 mkdir -p "$DLOC"
+find "$DLOC" -empty -type f -delete
 
 NUMGAMES=$(find /var/tmp/steamy_cats/* | wc -l)
 GAMESGOTTEN=$(find "$DLOC"* | wc -l)
@@ -35,7 +36,7 @@ do
 	APPID=$i
 	if [ ! -e "$DLOC""$APPID".html ]
 	then
-		curl -s -o "$DLOC""$APPID".html "$TLOC$APPID"
+		curl --cookie "mature_content=1 ; birthtime=-729000000" -s -o "$DLOC""$APPID".html "$TLOC$APPID"
 		let DOWNLOADED=$GAMEPROCESSED-$NUMEXISTS
 		tput cuu 1 && tput el # Using this to overwrite previous line
 		echo "Downloaded: $DOWNLOADED ~~ Existing: $NUMEXISTS"
