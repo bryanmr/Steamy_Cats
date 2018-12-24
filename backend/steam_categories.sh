@@ -33,15 +33,14 @@ grep "var rgGames" /var/tmp/Steamy_Cats_Community_Profile | \
 
 echo "Begin processing $COUNT_LINES lines of configuration in $1"
 
-APPS_SECTION=$(head -n "$END_APPS" "$1" | tail -$COUNT_LINES)
+APPS_SECTION=$(head -n "$END_APPS" "$1" | tail -$COUNT_LINES | grep -v -e '"TAGS ' -e '"FLAGS ' -e '"APP ' -e '"ALL"')
 GAMES=$(echo "$APPS_SECTION" | grep $'^\t\t\t\t\t\"' | cut -d\" -f2)
 
 function copyexisting
 {
 	OURSECTION=$(echo "$APPS_SECTION" | grep -A100 $'^\t\t\t\t\t\"'"$1"\" |\
 		awk 'NR==1,/^\t\t\t\t\t}$/' |\
-	       	grep -vi -e $'^\t\t\t\t\t\t}' -e $'^\t\t\t\t\t}' \
-		-e '"TAGS ' -e '"FLAGS ' -e '"APP ' -e '"ALL"'
+	       	grep -v -e $'^\t\t\t\t\t\t}' -e $'^\t\t\t\t\t}' \
 	)
 
 	if [ "$OURSECTION" == "" ]
