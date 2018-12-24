@@ -38,7 +38,7 @@ GAMES=$(echo "$APPS_SECTION" | grep $'^\t\t\t\t\t\"' | cut -d\" -f2)
 
 function copyexisting
 {
-	OURSECTION=$(echo "$APPS_SECTION" | grep -A100 $'\t\t\t\t\t\"'"$1" |\
+	OURSECTION=$(echo "$APPS_SECTION" | grep -A100 $'^\t\t\t\t\t\"'"$1"\" |\
 		awk 'NR==1,/^\t\t\t\t\t}$/' |\
 	       	grep -vi -e $'^\t\t\t\t\t\t}' -e $'^\t\t\t\t\t}' \
 		-e '"TAGS ' -e '"FLAGS ' -e '"APP ' -e '"ALL"'
@@ -46,7 +46,8 @@ function copyexisting
 
 	if [ "$OURSECTION" == "" ]
 	then
-		echo Severe error, skipping "$1" since it would be empty
+		echo Severe error, skipping "$1" since it would be empty, we are working on the below section:
+		echo "$APPS_SECTION" | grep -A100 $'\t\t\t\t\t\"'"$1" | awk 'NR==1,/^\t\t\t\t\t}$/'
 		exit 1
 	fi
 
