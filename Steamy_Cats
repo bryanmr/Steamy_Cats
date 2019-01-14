@@ -1,0 +1,339 @@
+#!/bin/bash
+
+#######################################################################################
+#### Parse Steam config and make game files                                        ####
+#######################################################################################
+
+function parse_config()
+{
+	rm -rf /var/tmp/steamy_cats/
+	mkdir /var/tmp/steamy_cats/
+
+	# Reads from a filename passed to it
+	# No arguments available, just outputs something Bash can handle instead of VDF
+
+	# We skip the bracket and header
+	let BEGIN_APPS=$(grep -n \"Apps\" "$1" | cut -d: -f1)+2
+	# We skip the bracket
+	let END_APPS=$(grep -n $'^\t\t\t\t}' "$1" | cut -d: -f1 | head -n1)-1
+	# Fixing the count here
+	let COUNT_LINES=END_APPS-BEGIN_APPS+1
+
+	# Download the Community Profile
+	echo "Downloading your community profile, if public, and then getting full list of games you own"
+	curl -s -o /var/tmp/Steamy_Cats_Community_Profile https://steamcommunity.com/profiles/"$(cat /var/tmp/Steamy_Cats_ACCNUM)"/games/?tab=all
+
+	# Find the JSON containing our games, then extract the APP ID with JQ
+	grep "var rgGames" /var/tmp/Steamy_Cats_Community_Profile | \
+		sed -e 's/var rgGames \= \[//' -e 's/\]\;//' -e 's/\,[{]/\n\{/g' | jq '.appid' | \
+		while read -r appid
+	do
+		{
+			printf "\t\t\t\t\t\"%s\"\n" "$appid"
+			printf "\t\t\t\t\t{\n"
+			printf "\t\t\t\t\t\t\"%s\"\n" "tags"
+			printf "\t\t\t\t\t\t{\n"
+		} > /var/tmp/steamy_cats/"$appid"
+
+	done
+
+	echo "Begin processing $COUNT_LINES lines of configuration in $1"
+
+	APPS_SECTION=$(head -n "$END_APPS" "$1" | tail -$COUNT_LINES | grep -v -e '"TAGS ' -e '"FLAGS ' -e '"APP ' -e '"ALL"')
+	GAMES=$(echo "$APPS_SECTION" | grep $'^\t\t\t\t\t\"' | cut -d\" -f2)
+
+	function copyexisting
+	{
+		OURSECTION=$(echo "$APPS_SECTION" | grep -A100 $'^\t\t\t\t\t\"'"$1"\" |\
+			awk 'NR==1,/^\t\t\t\t\t}$/' |\
+			grep -v -e $'^\t\t\t\t\t\t}' -e $'^\t\t\t\t\t}' \
+			)
+
+		if [ "$OURSECTION" == "" ]
+		then
+			echo Severe error, skipping "$1" since it would be empty, we are working on the below section:
+			echo "$APPS_SECTION" | grep -A100 $'\t\t\t\t\t\"'"$1" | awk 'NR==1,/^\t\t\t\t\t}$/'
+			exit 1
+		fi
+
+		echo "$OURSECTION" > /var/tmp/steamy_cats/"$1"
+
+		# Sometimes games don't have tags but other configs
+		# This adds the tags section at the end
+		if ! echo "$OURSECTION" | grep -q $'\t\t\t\t\t\"tags\"'
+		then
+			{
+				printf "\t\t\t\t\t\t\"%s\"\n" "tags"
+				printf "\t\t\t\t\t\t{\n"
+			} >> /var/tmp/steamy_cats/"$1"
+		fi
+	}
+
+	for game in $GAMES
+	do
+		copyexisting "$game" &
+	done
+	wait
+
+	# config/loginusers.vdf
+}
+
+#######################################################################################
+#### Download Game Details from Steam Store                                        ####
+#######################################################################################
+
+function download_store()
+{
+	if [ "$1" == "--front" ]
+	then
+		EXITMESSAGE="Steam Store User Readable Page"
+		DLOC="$HOME/.local/share/steam_store_frontend/"
+		TLOC="https://store.steampowered.com/app/"
+	elif [ "$1" == "--api" ]
+	then
+		EXITMESSAGE="Steam Store API"
+		TLOC="https://store.steampowered.com/api/appdetails/?appids="
+		DLOC="$HOME/.local/share/steam_store_api_json/"
+	else
+		echo "This script takes one argument."
+		echo "Supply --front for frontend download or --api for API"
+		exit
+	fi
+
+	mkdir -p "$DLOC"
+	find "$DLOC" -empty -type f -delete
+	find "$DLOC" -size -32c -type f -delete
+
+	NUMGAMES=$(find /var/tmp/steamy_cats/* | wc -l)
+	GAMESGOTTEN=$(find "$DLOC"* | wc -l)
+	echo "You have $NUMGAMES games that we are processing."
+	echo "There are $GAMESGOTTEN files already existing that we won't redownload."
+	echo "Starting downloads!"
+
+	let NUMEXISTS=0
+	let GAMEPROCESSED=0
+	let DOWNLOADED=0
+
+	cd /var/tmp/steamy_cats || exit
+	for i in *
+	do 
+		let GAMEPROCESSED=$GAMEPROCESSED+1
+		APPID=$i
+		if [ ! -e "$DLOC""$APPID".html ]
+		then
+			curl -L --cookie "mature_content=1 ; birthtime=-729000000" -s -o "$DLOC""$APPID".html "$TLOC$APPID"
+			let DOWNLOADED=$GAMEPROCESSED-$NUMEXISTS
+			tput cuu 1 && tput el # Using this to overwrite previous line
+			echo "Downloaded: $DOWNLOADED ~~ Existing: $NUMEXISTS"
+		else
+			let NUMEXISTS=$NUMEXISTS+1
+			tput cuu 1 && tput el # Using this to overwrite previous line
+			echo "Downloaded: $DOWNLOADED ~~ Existing: $NUMEXISTS"
+			continue
+		fi
+		sleep .2
+	done
+
+	echo "Downloads complete for the $EXITMESSAGE."
+
+	# jq '.[] | .data.categories' ./30.html
+	# grep -o "\"linux\":true" * | wc -l
+	# grep -o "\"linux\":false" * | wc -l
+	# grep -A1 InitAppTagModal ./281990.html | tail -1 | jq '.[] | .name' 2> /dev/null | cut -d\" -f2
+}
+
+#######################################################################################
+#### Make Categories                                                               ####
+#######################################################################################
+
+function make_categories()
+{
+	cd /var/tmp/steamy_cats/ || exit
+
+	echo "Adding new category tags to the games!"
+
+	function makecats
+	{
+		let VALNUM=100
+		CATS=$(jq '.[] | .data.categories' "$HOME/.local/share/steam_store_api_json/$1.html" 2> /dev/null | grep description | cut -d\" -f4)
+		echo "$CATS" | while read -r line
+		do
+			if [ "$line" == "" ]
+			then
+				printf "\t\t\t\t\t\t\t\"%s\"\t\t\"%s\"\n" "$VALNUM" "FLAGS NONE" >> /var/tmp/steamy_cats/"$1"
+			else
+				printf "\t\t\t\t\t\t\t\"%s\"\t\t\"FLAGS %s\"\n" "$VALNUM" "$line" >> /var/tmp/steamy_cats/"$1"
+			fi
+			let VALNUM=$VALNUM+1
+		done
+
+		if [ -f "$HOME/.local/share/steam_store_frontend/$1.html" ]
+		then
+			if grep -q "You must login to see this content." "$HOME/.local/share/steam_store_frontend/$1.html"
+			then
+				printf "\t\t\t\t\t\t\t\"%s\"\t\t\"%s\"\n" "304" "FLAGS ADULT" >> /var/tmp/steamy_cats/"$1"
+			fi
+
+			# This is basically the same as the flags above, but making it a function complicates things a bit IMO
+			let VALNUM=200
+			TAGS=$(grep -A1 InitAppTagModal "$HOME/.local/share/steam_store_frontend/$1.html" | tail -1 | jq '.[] | .name' 2> /dev/null | cut -d\" -f2)
+			echo "$TAGS" | while read -r line
+			do
+				if [ "$line" == "" ]
+				then
+					printf "\t\t\t\t\t\t\t\"%s\"\t\t\"%s\"\n" "$VALNUM" "TAGS NONE" >> /var/tmp/steamy_cats/"$1"
+				else
+					printf "\t\t\t\t\t\t\t\"%s\"\t\t\"TAGS %s\"\n" "$VALNUM" "$line" >> /var/tmp/steamy_cats/"$1"
+				fi
+				let VALNUM=$VALNUM+1
+			done
+		else
+			printf "\t\t\t\t\t\t\t\"%s\"\t\t\"%s\"\n" "200" "TAGS NONE" >> /var/tmp/steamy_cats/"$1"
+		fi
+
+		if grep -q '"linux":true' "$HOME/.local/share/steam_store_api_json/$1.html"
+		then
+			printf "\t\t\t\t\t\t\t\"%s\"\t\t\"APP NATIVE LINUX\"\n" "300" >> /var/tmp/steamy_cats/"$1"
+			#else
+			#DIR=$(dirname "$0")
+			#"$DIR"/proton_db_ratings.sh
+		fi
+
+		{
+			printf "\t\t\t\t\t\t\t\"%s\"\t\t\"ALL\"\n" "301"
+			printf "\t\t\t\t\t\t}\n"
+		} >> /var/tmp/steamy_cats/"$1"
+
+		if grep -q $'\t\t\t\t\t"Hidden"\t\t"' /var/tmp/steamy_cats/"$1"
+		then
+			HIDDENLINE=$(grep $'\t\t\t\t\t"Hidden"' /var/tmp/steamy_cats/"$1")
+			grep -hv $'\t\t\t\t\t"Hidden"' /var/tmp/steamy_cats/"$1" > /var/tmp/Steamy_Cats_Rewrite."$1"
+			cp /var/tmp/Steamy_Cats_Rewrite."$1" /var/tmp/steamy_cats/"$1"
+			echo "$HIDDENLINE" >> /var/tmp/steamy_cats/"$1"
+		fi
+
+		printf "\t\t\t\t\t}\n" >> /var/tmp/steamy_cats/"$1"
+	}
+
+	for i in *
+	do
+		makecats "$i" &
+	done
+	wait
+}
+
+#######################################################################################
+#### ProtonDB Ratings                                                              ####
+#######################################################################################
+
+function download_proton_db()
+{
+	cd /var/tmp/ || exit 1
+	if [ ! -d protondb-data/ ]
+	then
+		git clone https://github.com/bdefore/protondb-data.git || exit 1
+	fi
+	cd protondb-data/reports || exit 1
+	YEAR=$(find . | cut -d_ -f3 | sort -ru | head -n1)
+	MONTH=$(find . | grep "$YEAR" | cut -d_ -f2 | sort -Mr | head -n1)
+	TAR_FILENAME=$(find . | grep "$YEAR" | grep "$MONTH")
+	echo "Most recent file appears to be: $TAR_FILENAME"
+	tar -zxvf "$TAR_FILENAME" || exit 1
+}
+
+function calculate_proton_db()
+{
+	jq -r '.[] | [.appId, .rating] | join(",")' reports_piiremoved.json
+	# jq -r '.[] | [.appId, .rating] | join(",")' reports_piiremoved.json | grep '^10180' | sort | uniq -c
+}
+
+#######################################################################################
+#### Category List                                                                 ####
+#######################################################################################
+
+function category_list()
+{
+	mkdir -p ~/.config/Steamy_Cats/
+	echo "# List of all categories that games are assigned"
+	echo "# To skip over unwanted categories, save category names to ~/.config/Steamy_Cats/exclude.conf"
+	echo -n "# Lines with comments will be ignored."
+	grep -h -A100 \"tags\" /var/tmp/steamy_cats/* | grep -v -e "}" -e "{" -e "^--" | cut -d\" -f4 | sort -u
+}
+
+#######################################################################################
+#### Assemble Final Configurations                                                 ####
+#######################################################################################
+
+function assemble_steam_config()
+{
+	echo "Creating final configuration"
+
+	let BEGIN_APPS=$(grep -n \"Apps\" "$1" | cut -d: -f1)+1
+	let END_APPS=$(grep -n $'^\t\t\t\t}' "$1" | cut -d: -f1 | head -n1)
+
+	echo "Adding the top of the configuration"
+	head -n"$BEGIN_APPS" "$1" > /var/tmp/newconfig.vdf
+
+	echo "Compiling the Steam applications and categories"
+	if [ -f ~/.config/Steamy_Cats/exclude.conf ]
+	then
+		rm -f /var/tmp/Steamy_Cats_Excludes
+		grep -v "^#" ~/.config/Steamy_Cats/exclude.conf | while read -r line
+		do
+			echo "$line" >> /var/tmp/Steamy_Cats_Excludes
+		done
+		echo "We are skipping the below categories:"
+		cat /var/tmp/Steamy_Cats_Excludes
+		grep -hvf /var/tmp/Steamy_Cats_Excludes /var/tmp/steamy_cats/* >> /var/tmp/newconfig.vdf
+	else
+		cat /var/tmp/steamy_cats/* >> /var/tmp/newconfig.vdf
+	fi
+
+	echo "Attaching the bottom of the configuration"
+	tail -n+"$END_APPS" "$1" >> /var/tmp/newconfig.vdf
+
+	less /var/tmp/newconfig.vdf
+}
+
+#######################################################################################
+#### Main Logic                                                                    ####
+#######################################################################################
+
+echo "Possible users to make Steam categories for:"
+NAMES=$(grep PersonaName ~/.steam/steam/userdata/*/config/localconfig.vdf | cut -d\" -f4)
+let NUMCYCLE=1
+for i in $NAMES
+do
+	echo -n "$NUMCYCLE"": "
+	echo "$i"
+	let NUMCYCLE=$NUMCYCLE+1
+done
+
+read -rp "Who do you want to use? Answer: " WHICHSTEAM
+
+WHICHACC=$(echo "$NAMES" | sed -n "$WHICHSTEAM"p)
+WEBACCNUM=$(grep -B3 "$WHICHACC" ~/.steam/steam/config/loginusers.vdf | head -n1 | cut -d\" -f2)
+echo "$WEBACCNUM" > /var/tmp/Steamy_Cats_ACCNUM
+
+echo "We are using: $WHICHACC :: $WEBACCNUM"
+
+WHICH_CONFIG=$(grep PersonaName ~/.steam/steam/userdata/*/config/localconfig.vdf | sed -n 2p | cut -d: -f1)
+let COUNT_SLASHES=$(echo "$WHICH_CONFIG" | grep -o "/" | wc -l)-1
+OUR_CONFIG=$(echo "$WHICH_CONFIG" | cut -d/ -f1-$COUNT_SLASHES)"/7/remote/sharedconfig.vdf"
+echo "Our config file is: $OUR_CONFIG"
+
+if [ ! -e "$OUR_CONFIG" ]
+then
+	echo "We can't find the config file."
+	echo "This is important, so we are quitting."
+	exit
+fi
+
+parse_config "$OUR_CONFIG" || exit
+download_store --front
+download_store --api
+make_categories "$OUR_CONFIG"
+assemble_steam_config "$OUR_CONFIG"
+
+echo "If you are happy with this, run the below command:"
+echo "cp /var/tmp/newconfig.vdf $OUR_CONFIG"
