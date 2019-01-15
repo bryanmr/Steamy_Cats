@@ -1,5 +1,7 @@
 #!/bin/bash
 
+# See bottom of script for default behavior
+
 #######################################################################################
 #### Parse Steam config and make game files                                        ####
 #######################################################################################
@@ -37,12 +39,6 @@ function parse_config()
 
 	done
 
-	echo "Begin processing $COUNT_LINES lines of configuration in $1"
-
-	# This is an important part, it removes our old config and is the variable we process
-	APPS_SECTION=$(head -n "$END_APPS" "$1" | tail -$COUNT_LINES | grep -v -e '"TAGS ' -e '"SFLAGS ' -e '"APP ' -e '"ALL"' -e '"PDB ')
-	GAMES=$(echo "$APPS_SECTION" | grep $'^\t\t\t\t\t\"' | cut -d\" -f2)
-
 	function copyexisting
 	{
 		OURSECTION=$(echo "$APPS_SECTION" | grep -A100 $'^\t\t\t\t\t\"'"$1"\" |\
@@ -69,6 +65,20 @@ function parse_config()
 			} >> /var/tmp/steamy_cats/"$1"
 		fi
 	}
+
+	echo "Begin processing $COUNT_LINES lines of configuration in $1"
+
+	if [ "$WIPE_CONFIG" == "true" ]
+	then
+		# Requires pgrep with lookahead support to preserve favorites
+		APPS_SECTION=$(head -n "$END_APPS" "$1" | tail -$COUNT_LINES | grep -Pv $'\t\t\t\t\t\t\t\"\d*\"\t\t\"(?!favorite)')
+	else
+		# We are removing categories we create here
+		APPS_SECTION=$(head -n "$END_APPS" "$1" | tail -$COUNT_LINES | grep -v -e '"TAGS ' -e '"SFLAGS ' -e '"APP ' -e '"ALL"' -e '"PDB ')
+	fi
+
+	# List of game IDs
+	GAMES=$(echo "$APPS_SECTION" | grep $'^\t\t\t\t\t\"' | cut -d\" -f2)
 
 	for game in $GAMES
 	do
@@ -376,8 +386,30 @@ function assemble_steam_config()
 #### Main Logic                                                                    ####
 #######################################################################################
 
+CLI_ARGS=("$@")
+
+# Setting some defaults
+WIPE_CONFIG="false"
+for i in "${CLI_ARGS[@]}"
+do
+	echo "$i"
+	case "$i" in
+		"--ignore-old-categories")
+			WIPE_CONFIG="true"
+			;;
+		"--category-list")
+			category_list
+			exit
+			;;
+		*)
+			echo "Unknown option: $i"
+			exit
+			;;
+	esac
+done
+
 # Since we go pretty ham with parallel operations
-renice 19 $$
+renice 19 $$ > /dev/null
 
 echo "Possible users to make Steam categories for:"
 NAMES=$(grep PersonaName ~/.steam/steam/userdata/*/config/localconfig.vdf | cut -d\" -f4)
