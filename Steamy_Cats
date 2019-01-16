@@ -113,7 +113,7 @@ function download_store()
 	find "$DLOC" -empty -type f -delete
 	# find "$DLOC" -size -32c -type f -delete
 
-	echo "Gathering lists now!"
+	echo "Gathering the list of files to download from Steam now!"
 
 	let NUMEXISTS=0
 	let DOWNLOADING=0
@@ -347,8 +347,9 @@ function category_list()
 	mkdir -p ~/.config/Steamy_Cats/
 	echo "# List of all categories that games are assigned"
 	echo "# To skip over unwanted categories, save category names to ~/.config/Steamy_Cats/exclude.conf"
-	echo -n "# Lines with comments will be ignored."
-	grep -h -A100 \"tags\" /var/tmp/steamy_cats/* | grep -v -e "}" -e "{" -e "^--" | cut -d\" -f4 | sort -u
+	echo "# To limit the list to only those you want to include, save category names to ~/.config/Steamy_Cats/include.conf"
+	echo "# Lines with comments will be ignored."
+	cat /var/tmp/steamy_cats/* /var/tmp/newconfig.vdf | grep -P $'\t\t\t\t\t\t\t\"\d*\"\t\t\"(?!favorite)' | cut -d\" -f4 | sort -u
 }
 
 #######################################################################################
@@ -362,23 +363,29 @@ function assemble_steam_config()
 	let BEGIN_APPS=$(grep -n \"Apps\" "$1" | cut -d: -f1)+1
 	let END_APPS=$(grep -n $'^\t\t\t\t}' "$1" | cut -d: -f1 | head -n1)
 
-	echo "Adding the top of the configuration"
+	# Attaching the top of the config
 	head -n"$BEGIN_APPS" "$1" > /var/tmp/newconfig.vdf
 
-	echo "Compiling the Steam applications and categories"
-	if [ -f ~/.config/Steamy_Cats/exclude.conf ]
+	if [ -f "$INCLUDE_FILE" ]
 	then
-		rm -f /var/tmp/Steamy_Cats_Excludes
-		grep -v "^#" ~/.config/Steamy_Cats/exclude.conf | while read -r line
-		do
-			echo "$line" >> /var/tmp/Steamy_Cats_Excludes
-		done
-		grep -hvf /var/tmp/Steamy_Cats_Excludes /var/tmp/steamy_cats/* >> /var/tmp/newconfig.vdf
+		# We are going to get a diff of what we have and what we want, then get rid of the difference
+		cat /var/tmp/steamy_cats/* | grep -P $'\t\t\t\t\t\t\t\"\d*\"\t\t\"(?!favorite)' | cut -d\" -f4 | sort -u > /var/tmp/Steamy_Cats_List
+		grep -v "^#" "$INCLUDE_FILE" > /var/tmp/Steamy_Cats_Includes
+		grep -hvf /var/tmp/Steamy_Cats_Includes /var/tmp/Steamy_Cats_List > /var/tmp/Steamy_Cats_Diff
+		grep -vhf /var/tmp/Steamy_Cats_Diff /var/tmp/steamy_cats/* > /var/tmp/tempconfig.vdf
 	else
-		cat /var/tmp/steamy_cats/* >> /var/tmp/newconfig.vdf
+		cat /var/tmp/steamy_cats/* > /var/tmp/tempconfig.vdf
 	fi
 
-	echo "Attaching the bottom of the configuration"
+	if [ -f "$EXCLUDE_FILE" ]
+	then
+		grep -v "^#" "$EXCLUDE_FILE" > /var/tmp/Steamy_Cats_Excludes
+		grep -hvf /var/tmp/Steamy_Cats_Excludes /var/tmp/tempconfig.vdf >> /var/tmp/newconfig.vdf
+	else
+		cat /var/tmp/tempconfig.vdf >> /var/tmp/newconfig.vdf
+	fi
+
+	# Adding the bottom of the config
 	tail -n+"$END_APPS" "$1" >> /var/tmp/newconfig.vdf
 }
 
@@ -388,11 +395,15 @@ function assemble_steam_config()
 
 CLI_ARGS=("$@")
 
+# Since we go pretty ham with parallel operations
+renice 19 $$ > /dev/null
+
 # Setting some defaults
 WIPE_CONFIG="false"
+INCLUDE_FILE="$HOME/.config/Steamy_Cats/include.conf"
+EXCLUDE_FILE="$HOME/.config/Steamy_Cats/exclude.conf"
 for i in "${CLI_ARGS[@]}"
 do
-	echo "$i"
 	case "$i" in
 		"--ignore-old-categories")
 			WIPE_CONFIG="true"
@@ -401,15 +412,30 @@ do
 			category_list
 			exit
 			;;
+		"--include-file"*)
+			INCLUDE_FILE="$(echo "$i" | cut -d= -f2)"
+			echo "Only including categories found in $INCLUDE_FILE"
+			;;
+		"--exclude-file"*)
+			EXCLUDE_FILE="$(echo "$i" | cut -d= -f2)"
+			echo "Removing categories found in $EXCLUDE_FILE"
+			;;
+		"--help")
+			echo "--ignore-old-categories : Gets rid of all category configuration while retaining favorites"
+			echo "--category-list : Returns the list of categories available"
+			echo "--include-file : Location of the file containing a list of categories to include"
+			echo "  Usage: --include-file=\$FILENAME"
+			echo "--exclude-file : Location of the file containing a list of categories to exclude"
+			echo "  Usage: --exclude-file=\$FILENAME"
+			exit
+			;;
 		*)
 			echo "Unknown option: $i"
+			echo "Run with --help for more options"
 			exit
 			;;
 	esac
 done
-
-# Since we go pretty ham with parallel operations
-renice 19 $$ > /dev/null
 
 echo "Possible users to make Steam categories for:"
 NAMES=$(grep PersonaName ~/.steam/steam/userdata/*/config/localconfig.vdf | cut -d\" -f4)
