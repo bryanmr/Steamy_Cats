@@ -93,6 +93,27 @@ function parse_config()
 
 function download_store()
 {
+	function cleandls
+	{
+		# Deleting failed downloads to try again
+		cd "$DLOC" || exit 1
+		if grep -q '>Error<' -- *
+		then
+			grep -Zl '>Error<' -- * | xargs --null rm
+		fi
+
+		# This is set through a CLI switch
+		if [ "$CLEAN_DLS" == "true" ]
+		then
+			if grep -q -e '~FAILED~' -e '"success":false}' -- *
+			then
+				grep -Zl -e '~FAILED~' -e '"success":false}' -- * | xargs --null rm
+			fi
+			find "$DLOC" -empty -type f -delete
+			# find "$DLOC" -size -32c -type f -delete
+		fi
+	}
+
 	if [ "$1" == "--front" ]
 	then
 		EXITMESSAGE="Steam Store User Readable Page"
@@ -110,18 +131,14 @@ function download_store()
 	fi
 
 	mkdir -p "$DLOC"
-	find "$DLOC" -empty -type f -delete
-	# find "$DLOC" -size -32c -type f -delete
-
-	echo "Gathering the list of files to download from Steam now!"
+	cleandls
 
 	let NUMEXISTS=0
 	let DOWNLOADING=0
 	DL_LIST=""
 
 	cd /var/tmp/steamy_cats || exit
-
-	# Creating the list to be downloaded
+	echo "Gathering the list of files to download from Steam now!"
 	for i in *
 	do 
 		if [ ! -e "$DLOC""$i".html ]
@@ -158,6 +175,17 @@ function download_store()
 	done
 
 	wait
+
+	cleandls
+
+	# Prepare the release year list
+	if [ "$1" == "--api" ]
+	then
+		# We have to run this twice since the format for release date is not standardized
+		# Some entries have no release date
+		cat -- * | jq -j '.[].data | "\(.steam_appid)~\(.release_date.date)\n"' | sed -E 's/(^.+)\~.+\,(.+$)/\1\2/g' | sed -E 's/(^.+)\~.+\ (.+$)/\1\2/g' > /var/tmp/Steamy_Cats_Release_Year
+	fi
+
 	echo "Downloads complete for the $EXITMESSAGE."
 }
 
@@ -167,51 +195,48 @@ function download_store()
 
 function make_categories()
 {
-	cd /var/tmp/steamy_cats/ || exit
-
-	echo "Adding new category tags to the games!"
-
-	function makecats
+	function makeflags
 	{
-		let VALNUM=100
-		CATS=$(jq '.[] | .data.categories' "$HOME/.local/share/steam_store_api_json/$1.html" 2> /dev/null | grep description | cut -d\" -f4)
-		echo "$CATS" | while read -r line
-		do
-			if [ "$line" == "" ]
-			then
-				printf "\t\t\t\t\t\t\t\"%s\"\t\t\"%s\"\n" "$VALNUM" "SFLAGS NONE" >> /var/tmp/steamy_cats/"$1"
-			else
-				printf "\t\t\t\t\t\t\t\"%s\"\t\t\"SFLAGS %s\"\n" "$VALNUM" "$line" >> /var/tmp/steamy_cats/"$1"
-			fi
-			let VALNUM=$VALNUM+1
-		done
-
-		if [ -f "$HOME/.local/share/steam_store_frontend/$1.html" ]
+		FLAGS="$(jq '.[] | .data.categories' "$HOME/.local/share/steam_store_api_json/$1.html" 2> /dev/null | grep description | cut -d\" -f4)"
+		if [ "$FLAGS" == "" ]
 		then
-			if grep -q "You must login to see this content." "$HOME/.local/share/steam_store_frontend/$1.html"
-			then
-				printf "\t\t\t\t\t\t\t\"%s\"\t\t\"%s\"\n" "320" "SFLAGS ADULT" >> /var/tmp/steamy_cats/"$1"
-			fi
-
-			# This is basically the same as the flags above, but making it a function complicates things a bit IMO
-			let VALNUM=200
-			TAGS=$(grep -A1 InitAppTagModal "$HOME/.local/share/steam_store_frontend/$1.html" | tail -1 | jq '.[] | .name' 2> /dev/null | cut -d\" -f2)
-			echo "$TAGS" | while read -r line
-			do
-				if [ "$line" == "" ]
-				then
-					printf "\t\t\t\t\t\t\t\"%s\"\t\t\"%s\"\n" "$VALNUM" "TAGS NONE" >> /var/tmp/steamy_cats/"$1"
-				else
-					printf "\t\t\t\t\t\t\t\"%s\"\t\t\"TAGS %s\"\n" "$VALNUM" "$line" >> /var/tmp/steamy_cats/"$1"
-				fi
-				let VALNUM=$VALNUM+1
-			done
-		else
-			# We do a touch here so we don't have to try to download again
-			echo "FAILED" > "$HOME/.local/share/steam_store_frontend/$1.html"
-			printf "\t\t\t\t\t\t\t\"%s\"\t\t\"%s\"\n" "200" "TAGS NONE" >> /var/tmp/steamy_cats/"$1"
+			printf "\t\t\t\t\t\t\t\"%s\"\t\t\"%s\"\n" "100" "SFLAGS NONE" >> /var/tmp/steamy_cats/"$1"
+			return
 		fi
 
+		let VALNUM=100
+		while read -r line
+		do
+			printf "\t\t\t\t\t\t\t\"%s\"\t\t\"SFLAGS %s\"\n" "$VALNUM" "$line" >> /var/tmp/steamy_cats/"$1"
+			let VALNUM=$VALNUM+1
+		done <<< "$FLAGS"
+	}
+
+	function maketags
+	{
+		if grep -q "You must login to see this content." "$HOME/.local/share/steam_store_frontend/$1.html"
+		then
+			printf "\t\t\t\t\t\t\t\"%s\"\t\t\"%s\"\n" "320" "SFLAGS ADULT" >> /var/tmp/steamy_cats/"$1"
+			return
+		fi
+
+		TAGS="$(grep -A1 InitAppTagModal "$HOME/.local/share/steam_store_frontend/$1.html" | tail -1 | jq '.[] | .name' 2> /dev/null | cut -d\" -f2)"
+		if [ "$TAGS" == "" ]
+                then
+                        printf "\t\t\t\t\t\t\t\"%s\"\t\t\"%s\"\n" "200" "TAGS NONE" >> /var/tmp/steamy_cats/"$1"
+                        return
+                fi
+
+		let VALNUM=200
+		while read -r line
+		do
+			printf "\t\t\t\t\t\t\t\"%s\"\t\t\"TAGS %s\"\n" "$VALNUM" "$line" >> /var/tmp/steamy_cats/"$1"
+			let VALNUM=$VALNUM+1
+		done <<< "$TAGS"
+	}
+
+	function tagnative
+	{
 		# Write if we are Linux native
 		# Else check Proton DB ratings
 		if grep -q '"linux":true' "$HOME/.local/share/steam_store_api_json/$1.html"
@@ -220,10 +245,43 @@ function make_categories()
 		else
 			write_proton_db_scores "$1"
 		fi
+	}
+
+	function makerelease
+	{
+		RELYEAR="$(grep "^$1\ " /var/tmp/Steamy_Cats_Release_Year | cut -d\  -f2)"
+		if [ "$RELYEAR" == "" ]
+		then
+			printf "\t\t\t\t\t\t\t\"%s\"\t\t\"%s\"\n" "101" "RELEASE UNKNOWN" >> /var/tmp/steamy_cats/"$1"
+		else
+			printf "\t\t\t\t\t\t\t\"%s\"\t\t\"%s\"\n" "340" "RELEASE $RELYEAR" >> /var/tmp/steamy_cats/"$1"
+		fi
+	}
+
+	function makecats
+	{
+		if [ -f "$HOME/.local/share/steam_store_api_json/$1.html" ]
+		then
+			makeflags "$1"
+			tagnative "$1"
+			makerelease "$1"
+		else
+			printf "\t\t\t\t\t\t\t\"%s\"\t\t\"%s\"\n" "100" "SFLAGS NONE" >> /var/tmp/steamy_cats/"$1"
+			printf "\t\t\t\t\t\t\t\"%s\"\t\t\"%s\"\n" "101" "RELEASE UNKNOWN" >> /var/tmp/steamy_cats/"$1"
+			write_proton_db_scores "$1"
+		fi
+
+		if [ -f "$HOME/.local/share/steam_store_frontend/$1.html" ]
+		then
+			maketags "$1"
+		else
+			echo "~FAILED~" > "$HOME/.local/share/steam_store_frontend/$1.html"
+			printf "\t\t\t\t\t\t\t\"%s\"\t\t\"%s\"\n" "200" "TAGS NONE" >> /var/tmp/steamy_cats/"$1"
+		fi
 		
 		# Write the all group and final bracket
 		{
-			printf "\t\t\t\t\t\t\t\"%s\"\t\t\"ALL\"\n" "320"
+			printf "\t\t\t\t\t\t\t\"%s\"\t\t\"ALL\"\n" "330"
 			printf "\t\t\t\t\t\t}\n"
 		} >> /var/tmp/steamy_cats/"$1"
 
@@ -240,6 +298,10 @@ function make_categories()
 		printf "\t\t\t\t\t}\n" >> /var/tmp/steamy_cats/"$1"
 	}
 
+	# Main entry logic just calls function above a bunch
+	echo "Adding new category tags to the games!"
+
+	cd /var/tmp/steamy_cats/ || exit
 	for i in *
 	do
 		makecats "$i" &
@@ -400,6 +462,7 @@ renice 19 $$ > /dev/null
 
 # Setting some defaults
 WIPE_CONFIG="false"
+CLEAN_DLS="false"
 INCLUDE_FILE="$HOME/.config/Steamy_Cats/include.conf"
 EXCLUDE_FILE="$HOME/.config/Steamy_Cats/exclude.conf"
 for i in "${CLI_ARGS[@]}"
@@ -407,6 +470,9 @@ do
 	case "$i" in
 		"--ignore-old-categories")
 			WIPE_CONFIG="true"
+			;;
+		"--clean-dls")
+			CLEAN_DLS="true"
 			;;
 		"--category-list")
 			category_list
@@ -422,6 +488,7 @@ do
 			;;
 		"--help")
 			echo "--ignore-old-categories : Gets rid of all category configuration while retaining favorites"
+			echo "--clean-dls : Gets rid of failed downloads and tries again"
 			echo "--category-list : Returns the list of categories available"
 			echo "--include-file : Location of the file containing a list of categories to include"
 			echo "  Usage: --include-file=\$FILENAME"
