@@ -180,12 +180,12 @@ function download_store()
 
 	cleandls
 
-	# Prepare the release year list
+	# Parse the Store API Downloads for information for later
 	if [ "$1" == "--api" ]
 	then
-		# We have to run this twice since the format for release date is not standardized
 		# Some entries have no release date
-		cat -- * | jq -j 'keys[] as $k | "\($k)~\(.[].data.release_date.date)\n"' | sed -E 's/(^.+)\~.+\,(.+$)/\1\2/g' | sed -E 's/(^.+)\~.+\ (.+$)/\1\2/g' > /var/tmp/Steamy_Cats_Release_Year
+		cat -- * | jq -j 'keys[] as $k | "\($k)~\(.[].data.release_date.date[-4:])\n"' > /var/tmp/Steamy_Cats_Release_Year
+		cat -- * | jq -r 'keys[] as $k | $k + "~" + .[].data.categories[]?.description' > /var/tmp/Steamy_Cats_Flags
 	fi
 
 	echo "Downloads complete for the $EXITMESSAGE."
@@ -199,7 +199,7 @@ function make_categories()
 {
 	function makeflags
 	{
-		FLAGS="$(jq '.[] | .data.categories' "$HOME/.local/share/steam_store_api_json/$1.html" 2> /dev/null | grep description | cut -d\" -f4)"
+		FLAGS="$(grep "^$1~" /var/tmp/Steamy_Cats_Flags | cut -d~ -f2)"
 		if [ "$FLAGS" == "" ]
 		then
 			printf "\t\t\t\t\t\t\t\"%s\"\t\t\"%s\"\n" "100" "SFLAGS NONE" >> /var/tmp/steamy_cats/"$1"
@@ -222,7 +222,7 @@ function make_categories()
 			return
 		fi
 
-		TAGS="$(grep -A1 InitAppTagModal "$HOME/.local/share/steam_store_frontend/$1.html" | tail -1 | jq '.[] | .name' 2> /dev/null | cut -d\" -f2)"
+		TAGS="$(grep "\[{\"tagid\":" "$HOME/.local/share/steam_store_frontend/$1.html" | jq -r '.[].name' 2> /dev/null)"
 		if [ "$TAGS" == "" ]
                 then
                         printf "\t\t\t\t\t\t\t\"%s\"\t\t\"%s\"\n" "200" "TAGS NONE" >> /var/tmp/steamy_cats/"$1"
@@ -252,10 +252,10 @@ function make_categories()
 	function makerelease
 	{
 		return
-		RELYEAR="$(grep "^$1\ " /var/tmp/Steamy_Cats_Release_Year | cut -d\  -f2)"
-		if [ "$RELYEAR" == "" ]
+		RELYEAR="$(grep "^$1~" /var/tmp/Steamy_Cats_Release_Year | cut -d~ -f2)"
+		if [ "$RELYEAR" == "" ] || [ "$RELYEAR" == "null" ]
 		then
-			printf "\t\t\t\t\t\t\t\"%s\"\t\t\"%s\"\n" "101" "RELEASE UNKNOWN" >> /var/tmp/steamy_cats/"$1"
+			printf "\t\t\t\t\t\t\t\"%s\"\t\t\"%s\"\n" "340" "RELEASE UNKNOWN" >> /var/tmp/steamy_cats/"$1"
 		else
 			printf "\t\t\t\t\t\t\t\"%s\"\t\t\"%s\"\n" "340" "RELEASE $RELYEAR" >> /var/tmp/steamy_cats/"$1"
 		fi
