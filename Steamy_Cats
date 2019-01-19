@@ -23,12 +23,12 @@ function parse_config()
 
 	# Download the Community Profile
 	echo "Downloading your community profile, if public, and then getting full list of games you own"
-	curl -s -o /var/tmp/Steamy_Cats_Community_Profile https://steamcommunity.com/profiles/"$(cat /var/tmp/Steamy_Cats_ACCNUM)"/games/?tab=all
+	curl -s -o /var/tmp/Steamy_Cats_Community_Profile https://steamcommunity.com/profiles/"$WEBACCNUM"/games/?tab=all
 
 	# Find the JSON containing our games, then extract the APP ID with JQ
-	grep "var rgGames" /var/tmp/Steamy_Cats_Community_Profile | \
-		sed -e 's/var rgGames \= \[//' -e 's/\]\;//' -e 's/\,[{]/\n\{/g' | jq '.appid' | \
-		while read -r appid
+	GAMESLIST="$(grep "var rgGames" /var/tmp/Steamy_Cats_Community_Profile | \
+		sed -e 's/var rgGames \= \[//' -e 's/\]\;//' -e 's/\,[{]/\n\{/g' | jq '.appid')"
+	while read -r appid
 	do
 		{
 			printf "\t\t\t\t\t\"%s\"\n" "$appid"
@@ -36,20 +36,21 @@ function parse_config()
 			printf "\t\t\t\t\t\t\"%s\"\n" "tags"
 			printf "\t\t\t\t\t\t{\n"
 		} > /var/tmp/steamy_cats/"$appid"
+	done <<< "$GAMESLIST"
 
-	done
+	if [ "$FRESH_CONFIG" == "true" ]
+	then
+		return
+	fi
 
 	function copyexisting
 	{
-		OURSECTION=$(echo "$APPS_SECTION" | grep -A100 $'^\t\t\t\t\t\"'"$1"\" |\
-			awk 'NR==1,/^\t\t\t\t\t}$/' |\
-			grep -v -e $'^\t\t\t\t\t\t}' -e $'^\t\t\t\t\t}' \
-			)
+		OURSECTION=$(grep -A100 $'^\t\t\t\t\t\"'"$1"\" <<< "$APPS_SECTION" | awk 'NR==1,/^\t\t\t\t\t}$/' | head -n -2)
 
 		if [ "$OURSECTION" == "" ]
 		then
 			echo Severe error, skipping "$1" since it would be empty, we are working on the below section:
-			echo "$APPS_SECTION" | grep -A100 $'\t\t\t\t\t\"'"$1" | awk 'NR==1,/^\t\t\t\t\t}$/'
+			grep -A100 $'\t\t\t\t\t\"'"$1" <<< "$APPS_SECTION" | awk 'NR==1,/^\t\t\t\t\t}$/'
 			exit 1
 		fi
 
@@ -57,7 +58,7 @@ function parse_config()
 
 		# Sometimes games don't have tags but other configs
 		# This adds the tags section at the end
-		if ! echo "$OURSECTION" | grep -q $'\t\t\t\t\t\"tags\"'
+		if ! grep -q $'\t\t\t\t\t\"tags\"' <<< "$OURSECTION"
 		then
 			{
 				printf "\t\t\t\t\t\t\"%s\"\n" "tags"
@@ -74,11 +75,12 @@ function parse_config()
 		APPS_SECTION=$(head -n "$END_APPS" "$1" | tail -$COUNT_LINES | grep -Pv $'\t\t\t\t\t\t\t\"\d*\"\t\t\"(?!favorite)')
 	else
 		# We are removing categories we create here
-		APPS_SECTION=$(head -n "$END_APPS" "$1" | tail -$COUNT_LINES | grep -v -e '"TAGS ' -e '"SFLAGS ' -e '"APP ' -e '"ALL"' -e '"PDB ')
+		APPS_SECTION=$(head -n "$END_APPS" "$1" | tail -$COUNT_LINES |\
+		       grep -v -e '"TAGS ' -e '"SFLAGS ' -e '"APP ' -e '"ALL"' -e '"PDB ' -e '"RELEASE ')
 	fi
 
 	# List of game IDs
-	GAMES=$(echo "$APPS_SECTION" | grep $'^\t\t\t\t\t\"' | cut -d\" -f2)
+	GAMES=$(grep $'^\t\t\t\t\t\"' <<< "$APPS_SECTION" | cut -d\" -f2)
 
 	for game in $GAMES
 	do
@@ -133,8 +135,8 @@ function download_store()
 	mkdir -p "$DLOC"
 	cleandls
 
-	let NUMEXISTS=0
-	let DOWNLOADING=0
+	NUMEXISTS=0
+	DOWNLOADING=0
 	DL_LIST=""
 
 	cd /var/tmp/steamy_cats || exit
@@ -152,7 +154,7 @@ function download_store()
 
 	echo "Downloading files for these game IDs: $DL_LIST" && echo
 
-	let DOWNLOADED=0
+	DOWNLOADED=0
 	for i in $DL_LIST
 	do
 		let DOWNLOADED=$DOWNLOADED+1
@@ -183,7 +185,7 @@ function download_store()
 	then
 		# We have to run this twice since the format for release date is not standardized
 		# Some entries have no release date
-		cat -- * | jq -j '.[].data | "\(.steam_appid)~\(.release_date.date)\n"' | sed -E 's/(^.+)\~.+\,(.+$)/\1\2/g' | sed -E 's/(^.+)\~.+\ (.+$)/\1\2/g' > /var/tmp/Steamy_Cats_Release_Year
+		cat -- * | jq -j 'keys[] as $k | "\($k)~\(.[].data.release_date.date)\n"' | sed -E 's/(^.+)\~.+\,(.+$)/\1\2/g' | sed -E 's/(^.+)\~.+\ (.+$)/\1\2/g' > /var/tmp/Steamy_Cats_Release_Year
 	fi
 
 	echo "Downloads complete for the $EXITMESSAGE."
@@ -204,7 +206,7 @@ function make_categories()
 			return
 		fi
 
-		let VALNUM=100
+		VALNUM=100
 		while read -r line
 		do
 			printf "\t\t\t\t\t\t\t\"%s\"\t\t\"SFLAGS %s\"\n" "$VALNUM" "$line" >> /var/tmp/steamy_cats/"$1"
@@ -227,7 +229,7 @@ function make_categories()
                         return
                 fi
 
-		let VALNUM=200
+		VALNUM=200
 		while read -r line
 		do
 			printf "\t\t\t\t\t\t\t\"%s\"\t\t\"TAGS %s\"\n" "$VALNUM" "$line" >> /var/tmp/steamy_cats/"$1"
@@ -249,6 +251,7 @@ function make_categories()
 
 	function makerelease
 	{
+		return
 		RELYEAR="$(grep "^$1\ " /var/tmp/Steamy_Cats_Release_Year | cut -d\  -f2)"
 		if [ "$RELYEAR" == "" ]
 		then
@@ -345,27 +348,27 @@ function write_proton_db_scores()
 	fi
 
 	# Mean
-	let TOTAL=0
-	let NUMVALS=0
+	TOTAL=0
+	NUMVALS=0
 	while read -r line
 	do
-		let MULT1="$(echo "$line" | awk '{print $1}')"
+		MULT1="$(awk '{print $1}' <<< "$line")"
 		let NUMVALS=$NUMVALS+$MULT1
-		case "$(echo "$line" | cut -d, -f2)" in
+		case "$(cut -d, -f2 <<< "$line")" in
 			"Platinum")
-				let MULT2=4
+				MULT2=4
 				;;
 			"Gold")
-				let MULT2=3
+				MULT2=3
 				;;
 			"Silver")
-				let MULT2=2
+				MULT2=2
 				;;
 			"Bronze")
-				let MULT2=1
+				MULT2=1
 				;;
 			"Borked")
-				let MULT2=0
+				MULT2=0
 				;;
 			*)
 				echo "We shouldn't reach here"
@@ -376,7 +379,7 @@ function write_proton_db_scores()
 		let TOTAL=$TOTAL+$MULT1*$MULT2
 	done <<< "$(grep "^$1" /var/tmp/steamy_pdb | sort | uniq -c)"
 	let RAWMEAN=$TOTAL/$NUMVALS
-	let ROUNDMEAN=$(echo $RAWMEAN | awk '{print int($1+0.5)}')
+	let ROUNDMEAN=$(awk '{print int($1+0.5)}' <<< "$RAWMEAN")
 	case $ROUNDMEAN in
 		4)
 			printf "\t\t\t\t\t\t\t\"%s\"\t\t\"PDB MEAN Platinum\"\n" "302" >> /var/tmp/steamy_cats/"$1"
@@ -463,13 +466,20 @@ renice 19 $$ > /dev/null
 # Setting some defaults
 WIPE_CONFIG="false"
 CLEAN_DLS="false"
+FRESH_CONFIG="false"
 INCLUDE_FILE="$HOME/.config/Steamy_Cats/include.conf"
 EXCLUDE_FILE="$HOME/.config/Steamy_Cats/exclude.conf"
 for i in "${CLI_ARGS[@]}"
 do
 	case "$i" in
+		"--debug")
+			set -uexo pipefail
+			;;
 		"--ignore-old-categories")
 			WIPE_CONFIG="true"
+			;;
+		"--clear-whole-config")
+			FRESH_CONFIG="true"
 			;;
 		"--clean-dls")
 			CLEAN_DLS="true"
@@ -479,15 +489,17 @@ do
 			exit
 			;;
 		"--include-file"*)
-			INCLUDE_FILE="$(echo "$i" | cut -d= -f2)"
+			INCLUDE_FILE="$(cut -d= -f2 <<< "$i")"
 			echo "Only including categories found in $INCLUDE_FILE"
 			;;
 		"--exclude-file"*)
-			EXCLUDE_FILE="$(echo "$i" | cut -d= -f2)"
+			EXCLUDE_FILE="$(cut -d= -f2 <<< "$i")"
 			echo "Removing categories found in $EXCLUDE_FILE"
 			;;
 		"--help")
+			echo "--debug : Turn on lots of things to exit on error and show commands being ran"
 			echo "--ignore-old-categories : Gets rid of all category configuration while retaining favorites"
+			echo "--clear-whole-config : Preserves nothing from old configuration"
 			echo "--clean-dls : Gets rid of failed downloads and tries again"
 			echo "--category-list : Returns the list of categories available"
 			echo "--include-file : Location of the file containing a list of categories to include"
@@ -506,11 +518,10 @@ done
 
 echo "Possible users to make Steam categories for:"
 NAMES=$(grep PersonaName ~/.steam/steam/userdata/*/config/localconfig.vdf | cut -d\" -f4)
-let NUMCYCLE=1
+NUMCYCLE=1
 for i in $NAMES
 do
-	echo -n "$NUMCYCLE"": "
-	echo "$i"
+	echo "$NUMCYCLE : $i"
 	let NUMCYCLE=$NUMCYCLE+1
 done
 
@@ -518,13 +529,12 @@ read -rp "Who do you want to use? Answer: " WHICHSTEAM
 
 WHICHACC=$(echo "$NAMES" | sed -n "$WHICHSTEAM"p)
 WEBACCNUM=$(grep -B3 "$WHICHACC" ~/.steam/steam/config/loginusers.vdf | head -n1 | cut -d\" -f2)
-echo "$WEBACCNUM" > /var/tmp/Steamy_Cats_ACCNUM
 
 echo "We are using: $WHICHACC :: $WEBACCNUM"
 
 WHICH_CONFIG=$(grep PersonaName ~/.steam/steam/userdata/*/config/localconfig.vdf | sed -n "$WHICHSTEAM"p | cut -d: -f1)
-let COUNT_SLASHES=$(echo "$WHICH_CONFIG" | grep -o "/" | wc -l)-1
-OUR_CONFIG=$(echo "$WHICH_CONFIG" | cut -d/ -f1-$COUNT_SLASHES)"/7/remote/sharedconfig.vdf"
+let COUNT_SLASHES=$(grep -o "/" <<< "$WHICH_CONFIG" | wc -l)-1
+OUR_CONFIG=$(cut -d/ -f1-$COUNT_SLASHES <<< "$WHICH_CONFIG")"/7/remote/sharedconfig.vdf"
 echo "Our config file is: $OUR_CONFIG"
 
 if [ ! -e "$OUR_CONFIG" ]
