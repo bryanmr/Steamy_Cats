@@ -76,7 +76,7 @@ function parse_config()
 	else
 		# We are removing categories we create here
 		APPS_SECTION=$(head -n "$END_APPS" "$1" | tail -$COUNT_LINES |\
-		       grep -v -e '"TAGS ' -e '"SFLAGS ' -e '"APP ' -e '"ALL"' -e '"PDB ' -e '"RELEASE ')
+		       grep -v -e '"TAGS ' -e '"SFLAGS ' -e '"APP ' -e '"ALL"' -e '"PDB ' -e '"RELEASE ' -e '"REVIEW ')
 	fi
 
 	# List of game IDs
@@ -186,6 +186,9 @@ function download_store()
 		# Some entries have no release date
 		cat -- * | jq -j 'keys[] as $k | "\($k)~\(.[].data.release_date.date[-4:])\n"' > /var/tmp/Steamy_Cats_Release_Year
 		cat -- * | jq -r 'keys[] as $k | $k + "~" + .[].data.categories[]?.description' > /var/tmp/Steamy_Cats_Flags
+	elif [ "$1" == "--front" ]
+	then
+		grep -A1 "Overall Reviews:" -- * | grep "game_review_summary" | grep -v "Need more user reviews" | sed 's/\..*\">/~/' | cut -d\< -f1 > /var/tmp/Steamy_Cats_Reviews
 	fi
 
 	echo "Downloads complete for the $EXITMESSAGE."
@@ -251,13 +254,23 @@ function make_categories()
 
 	function makerelease
 	{
-		return
 		RELYEAR="$(grep "^$1~" /var/tmp/Steamy_Cats_Release_Year | cut -d~ -f2)"
 		if [ "$RELYEAR" == "" ] || [ "$RELYEAR" == "null" ]
 		then
 			printf "\t\t\t\t\t\t\t\"%s\"\t\t\"%s\"\n" "340" "RELEASE UNKNOWN" >> /var/tmp/steamy_cats/"$1"
 		else
 			printf "\t\t\t\t\t\t\t\"%s\"\t\t\"%s\"\n" "340" "RELEASE $RELYEAR" >> /var/tmp/steamy_cats/"$1"
+		fi
+	}
+
+	function makereviews
+	{
+		REVIEW="$(grep "^$1~" /var/tmp/Steamy_Cats_Reviews | cut -d~ -f2)"
+		if [ "$REVIEW" == "" ]
+		then
+			return
+		else
+			printf "\t\t\t\t\t\t\t\"%s\"\t\t\"%s\"\n" "350" "REVIEW $REVIEW" >> /var/tmp/steamy_cats/"$1"
 		fi
 	}
 
@@ -277,6 +290,7 @@ function make_categories()
 		if [ -f "$HOME/.local/share/steam_store_frontend/$1.html" ]
 		then
 			maketags "$1"
+			makereviews "$1"
 		else
 			echo "~FAILED~" > "$HOME/.local/share/steam_store_frontend/$1.html"
 			printf "\t\t\t\t\t\t\t\"%s\"\t\t\"%s\"\n" "200" "TAGS NONE" >> /var/tmp/steamy_cats/"$1"
@@ -318,18 +332,37 @@ function make_categories()
 
 function download_proton_db()
 {
-	echo "Downloading the ProtonDB"
+	function check_pdb
+	{
+		if [ ! -d /var/tmp/protondb-data/ ]
+		then
+			cd /var/tmp/ || exit 1
+			echo "Downloading Proton DB Info using Git"
+			git clone https://github.com/bdefore/protondb-data.git &> /dev/null || exit 1
+		fi
+	}
 	rm -f /var/tmp/protondb-data/reports/reports_piiremoved.json /var/tmp/steamy_pdb
-	cd /var/tmp/ || exit 1
-	if [ ! -d protondb-data/ ]
-	then
-		git clone https://github.com/bdefore/protondb-data.git || exit 1
-	fi
-	cd protondb-data/reports || exit 1
+
+	check_pdb
+	cd /var/tmp/protondb-data/reports || exit 1
+
 	YEAR=$(find . | cut -d_ -f3 | sort -ru | head -n1)
-	MONTH=$(find . | grep "$YEAR" | cut -d_ -f2 | sort -Mr | head -n1)
+	MONTH=$(find . | grep "$YEAR" | cut -d_ -f2 | sort -Mr | head -n1 | cut -b1-3)
+
+	# If there is a new Proton DB, we should try to get it
+	if [ "$MONTH" != "$(date +%b | tr '[:upper:]' '[:lower:]')" ]
+	then
+		cd ../.. || exit 1
+		rm -rf /var/tmp/protondb-data/
+		check_pdb
+
+		cd /var/tmp/protondb-data/reports || exit 1
+		YEAR=$(find . | cut -d_ -f3 | sort -ru | head -n1)
+		MONTH=$(find . | grep "$YEAR" | cut -d_ -f2 | sort -Mr | head -n1)
+	fi
+
 	TAR_FILENAME=$(find . | grep "$YEAR" | grep "$MONTH")
-	echo "Most recent file appears to be: $TAR_FILENAME"
+	echo "Most recent ProtonDB file appears to be: $TAR_FILENAME"
 	tar -zxvf "$TAR_FILENAME" > /dev/null || exit 1
 	jq -r '.[] | [.appId, .rating] | join(",")' /var/tmp/protondb-data/reports/reports_piiremoved.json > /var/tmp/steamy_pdb
 }
