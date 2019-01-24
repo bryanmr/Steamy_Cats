@@ -84,7 +84,12 @@ function parse_config()
 
 	for game in $GAMES
 	do
-		copyexisting "$game" &
+		if [ "$SEQUENTIAL" == "true" ]
+		then
+			copyexisting "$game"
+		else
+			copyexisting "$game" &
+		fi
 	done
 	wait
 }
@@ -202,13 +207,13 @@ function make_categories()
 {
 	function makeflags
 	{
-		FLAGS="$(grep "^$1~" /var/tmp/Steamy_Cats_Flags | cut -d~ -f2)"
-		if [ "$FLAGS" == "" ]
+		if ! grep -q "^$1~" /var/tmp/Steamy_Cats_Flags
 		then
 			printf "\t\t\t\t\t\t\t\"%s\"\t\t\"%s\"\n" "100" "SFLAGS NONE" >> /var/tmp/steamy_cats/"$1"
 			return
 		fi
 
+		FLAGS="$(grep "^$1~" /var/tmp/Steamy_Cats_Flags | cut -d~ -f2)"
 		VALNUM=100
 		while read -r line
 		do
@@ -225,13 +230,13 @@ function make_categories()
 			return
 		fi
 
-		TAGS="$(grep "\[{\"tagid\":" "$HOME/.local/share/steam_store_frontend/$1.html" | jq -r '.[].name' 2> /dev/null)"
-		if [ "$TAGS" == "" ]
+		if ! grep -q "\[{\"tagid\":" "$HOME/.local/share/steam_store_frontend/$1.html"
                 then
                         printf "\t\t\t\t\t\t\t\"%s\"\t\t\"%s\"\n" "200" "TAGS NONE" >> /var/tmp/steamy_cats/"$1"
                         return
                 fi
 
+		TAGS="$(grep "\[{\"tagid\":" "$HOME/.local/share/steam_store_frontend/$1.html" | sed 's/\],/]/' | jq -r '.[].name' 2> /dev/null)"
 		VALNUM=200
 		while read -r line
 		do
@@ -254,22 +259,27 @@ function make_categories()
 
 	function makerelease
 	{
-		RELYEAR="$(grep "^$1~" /var/tmp/Steamy_Cats_Release_Year | cut -d~ -f2)"
-		if [ "$RELYEAR" == "" ] || [ "$RELYEAR" == "null" ]
+		if ! grep -q "^$1~" /var/tmp/Steamy_Cats_Release_Year
 		then
 			printf "\t\t\t\t\t\t\t\"%s\"\t\t\"%s\"\n" "340" "RELEASE UNKNOWN" >> /var/tmp/steamy_cats/"$1"
 		else
-			printf "\t\t\t\t\t\t\t\"%s\"\t\t\"%s\"\n" "340" "RELEASE $RELYEAR" >> /var/tmp/steamy_cats/"$1"
+			RELYEAR="$(grep "^$1~" /var/tmp/Steamy_Cats_Release_Year | cut -d~ -f2)"
+			if [ "$RELYEAR" == "null" ]
+			then
+				printf "\t\t\t\t\t\t\t\"%s\"\t\t\"%s\"\n" "340" "RELEASE UNKNOWN" >> /var/tmp/steamy_cats/"$1"
+			else
+				printf "\t\t\t\t\t\t\t\"%s\"\t\t\"%s\"\n" "340" "RELEASE $RELYEAR" >> /var/tmp/steamy_cats/"$1"
+			fi
 		fi
 	}
 
 	function makereviews
 	{
-		REVIEW="$(grep "^$1~" /var/tmp/Steamy_Cats_Reviews | cut -d~ -f2)"
-		if [ "$REVIEW" == "" ]
+		if ! grep -q "^$1~" /var/tmp/Steamy_Cats_Reviews
 		then
 			return
 		else
+			REVIEW="$(grep "^$1~" /var/tmp/Steamy_Cats_Reviews | cut -d~ -f2)"
 			printf "\t\t\t\t\t\t\t\"%s\"\t\t\"%s\"\n" "350" "REVIEW $REVIEW" >> /var/tmp/steamy_cats/"$1"
 		fi
 	}
@@ -321,7 +331,12 @@ function make_categories()
 	cd /var/tmp/steamy_cats/ || exit
 	for i in *
 	do
-		makecats "$i" &
+		if [ "$SEQUENTIAL" == "true" ]
+		then
+			makecats "$i"
+		else
+			makecats "$i" &
+		fi
 	done
 	wait
 }
@@ -370,12 +385,13 @@ function download_proton_db()
 function write_proton_db_scores()
 {
 	# Mode
-	PDB_MODE="$(grep "^$1" /var/tmp/steamy_pdb | sort | uniq -c | sort -nr | head -n1 | cut -d, -f2)"
-	if [ "$PDB_MODE" == "" ]
+	PDBNUM=0
+	if ! grep -q "^$1" /var/tmp/steamy_pdb
 	then
 		printf "\t\t\t\t\t\t\t\"%s\"\t\t\"PDB UNRATED\"\n" "301" >> /var/tmp/steamy_cats/"$1"
 		return
 	else
+		PDB_MODE="$(grep "^$1" /var/tmp/steamy_pdb | sort | uniq -c | sort -nr | head -n1 | cut -d, -f2)"
 		printf "\t\t\t\t\t\t\t\"%s\"\t\t\"PDB MODE %s\"\n" "301" "$PDB_MODE" >> /var/tmp/steamy_cats/"$1"
 		let PDBNUM=$PDBNUM+1
 	fi
@@ -409,10 +425,10 @@ function write_proton_db_scores()
 				;;
 		esac
 
-		let TOTAL=$TOTAL+$MULT1*$MULT2
+		TOTAL=$(( TOTAL+MULT1*MULT2 ))
 	done <<< "$(grep "^$1" /var/tmp/steamy_pdb | sort | uniq -c)"
-	let RAWMEAN=$TOTAL/$NUMVALS
-	let ROUNDMEAN=$(awk '{print int($1+0.5)}' <<< "$RAWMEAN")
+	RAWMEAN=$(( TOTAL/NUMVALS ))
+	ROUNDMEAN=$(awk '{print int($1+0.5)}' <<< "$RAWMEAN")
 	case $ROUNDMEAN in
 		4)
 			printf "\t\t\t\t\t\t\t\"%s\"\t\t\"PDB MEAN Platinum\"\n" "302" >> /var/tmp/steamy_cats/"$1"
@@ -500,6 +516,7 @@ renice 19 $$ > /dev/null
 WIPE_CONFIG="false"
 CLEAN_DLS="false"
 FRESH_CONFIG="false"
+SEQUENTIAL="false"
 INCLUDE_FILE="$HOME/.config/Steamy_Cats/include.conf"
 EXCLUDE_FILE="$HOME/.config/Steamy_Cats/exclude.conf"
 for i in "${CLI_ARGS[@]}"
@@ -507,6 +524,9 @@ do
 	case "$i" in
 		"--debug")
 			set -uexo pipefail
+			;;
+		"--sequential")
+			SEQUENTIAL="true"
 			;;
 		"--ignore-old-categories")
 			WIPE_CONFIG="true"
@@ -531,6 +551,8 @@ do
 			;;
 		"--help")
 			echo "--debug : Turn on lots of things to exit on error and show commands being ran"
+			echo "  You should also consider --sequential with --debug for more meaningful output"
+			echo "--sequential : Runs commands one at a time instead of in parallel"
 			echo "--ignore-old-categories : Gets rid of all category configuration while retaining favorites"
 			echo "--clear-whole-config : Preserves nothing from old configuration"
 			echo "--clean-dls : Gets rid of failed downloads and tries again"
