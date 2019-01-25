@@ -1,4 +1,5 @@
 #!/bin/bash
+if ! type jq > /dev/null; then echo Script requires jq to be installed; fi
 trap 'rm -rf "/var/tmp/Steamy_Cats/"' EXIT
 rm -rf /var/tmp/Steamy_Cats/
 mkdir -p /var/tmp/Steamy_Cats/ /var/tmp/Steamy_Cats/fragments/ /var/tmp/Steamy_Cats/rewrites/
