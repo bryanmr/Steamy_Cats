@@ -5,7 +5,7 @@ Run the script and select a user. You may also run with --help to see more optio
 
 Requires jq, Steam, and other common utilities to be installed. This script assumes Steam is located in the ~/.local/share/ folder and has not been setup with Flatpaks, yet.
 ## Help Output
-'''
+```
 Steamy Cats is a script to categorize and organize Steam games
 	Options include:
 	--debug : Turn on lots of things to exit on error and show commands being ran
@@ -23,7 +23,7 @@ Steamy Cats is a script to categorize and organize Steam games
 	  Usage: --include-file=$FILENAME
 	--exclude-file : Location of the file containing a list of categories to exclude
 	  Usage: --exclude-file=$FILENAME
-'''
+```
 ### Disclaimer
 This script works on my Ubuntu 18.04 installation. I have not tested it elsewhere.
 
