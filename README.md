@@ -3,7 +3,7 @@ A Steam Game Category Sorter Written in Bash. This script will output the user t
 
 Run the script and select a user. You may also run with --help to see more options.
 
-Requires jq, Steam, and other common utilities to be installed. This script assumes Steam is located in the ~/.local/share/ folder and has not been setup with Flatpaks, yet.
+Requires jq, Steam, and other common utilities to be installed. This script assumes Steam is located in the ~/.steam/ folder and has not been setup with Flatpaks, yet.
 ## Help Output
 ```
 Steamy Cats is a script to categorize and organize Steam games
@@ -28,3 +28,24 @@ Steamy Cats is a script to categorize and organize Steam games
 This script works on my Ubuntu 18.04 installation. I have not tested it elsewhere.
 
 Valve and Steam are trademarks of the Valve corporation. They have not endorsed or sanctioned the creation or usage of this script of these trademarks.
+### Example Output of Successful Run
+```
+Command line passed user number: 2
+We are using: SomeUser :: 0000
+Our config file is: /home/user/.steam/steam/userdata/00/7/remote/sharedconfig.vdf
+Downloading your community profile, if public, and then getting full list of games you own
+Begin processing 45717 lines of configuration in /home/user/.steam/steam/userdata/00/7/remote/sharedconfig.vdf
+Gathering the list of files to download from Steam now!
+Downloading files for these game IDs: 
+
+Downloads complete for the Steam Store User Readable Page.
+Gathering the list of files to download from Steam now!
+Downloading files for these game IDs: 
+
+Downloads complete for the Steam Store API.
+Most recent ProtonDB file appears to be: ./reports_jan1_2019.tar.gz
+Adding new category tags to the games!
+Creating final configuration
+New config written. To apply, run the below command:
+cp /var/tmp/newconfig.vdf /home/user/.steam/steam/userdata/00/7/remote/sharedconfig.vdf
+```
