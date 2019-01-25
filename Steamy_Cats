@@ -625,6 +625,8 @@ let COUNT_SLASHES=$(grep -o "/" <<< "$WHICH_CONFIG" | wc -l)-1
 OUR_CONFIG=$(cut -d/ -f1-$COUNT_SLASHES <<< "$WHICH_CONFIG")"/7/remote/sharedconfig.vdf"
 echo "Our config file is: $OUR_CONFIG"
 
+cp "$OUR_CONFIG" /var/tmp/oldconfig.vdf
+
 if [ ! -e "$OUR_CONFIG" ]
 then
 	echo "We can't find the config file."
@@ -639,5 +641,6 @@ download_proton_db
 make_categories "$OUR_CONFIG"
 assemble_steam_config "$OUR_CONFIG"
 
+echo "Old config backed up to /var/tmp/oldconfig.vdf"
 echo "New config written. To apply, run the below command:"
 echo "cp /var/tmp/newconfig.vdf $OUR_CONFIG"
