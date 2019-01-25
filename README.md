@@ -49,3 +49,38 @@ Creating final configuration
 New config written. To apply, run the below command:
 cp /var/tmp/newconfig.vdf /home/user/.steam/steam/userdata/00/7/remote/sharedconfig.vdf
 ```
+### Sample VDF Output
+```
+"10"
+{
+	"tags"
+	{
+		"101"		"SFLAGS Online Multi-Player"
+		"102"		"SFLAGS Local Multi-Player"
+		"301"		"APP NATIVE LINUX"
+		"340"		"RELEASE 2000"
+		"200"		"TAGS Action"
+		"201"		"TAGS FPS"
+		"202"		"TAGS Multiplayer"
+		"203"		"TAGS Shooter"
+		"204"		"TAGS Classic"
+		"205"		"TAGS Team-Based"
+		"206"		"TAGS First-Person"
+		"207"		"TAGS Competitive"
+		"208"		"TAGS Tactical"
+		"209"		"TAGS 1990's"
+		"210"		"TAGS e-sports"
+		"211"		"TAGS PvP"
+		"212"		"TAGS Military"
+		"213"		"TAGS Strategy"
+		"214"		"TAGS Score Attack"
+		"215"		"TAGS Survival"
+		"216"		"TAGS Old School"
+		"217"		"TAGS Assassin"
+		"218"		"TAGS 1980s"
+		"219"		"TAGS Violent"
+		"350"		"REVIEW Overwhelmingly Positive"
+		"330"		"ALL"
+	}
+}
+```
