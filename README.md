@@ -30,6 +30,8 @@ Steamy Cats is a script to categorize and organize Steam games
 This script works on my Ubuntu 18.04 installation. I have not tested it elsewhere.
 
 Valve and Steam are trademarks of the Valve corporation. They have not endorsed or sanctioned the creation or usage of this script of these trademarks.
+### Image of Generated Library
+![Example Image of Steam Library](Example.png?raw=true "Example Image")
 ### Example Output of Successful Run
 ```
 # ./Steamy_Cats
