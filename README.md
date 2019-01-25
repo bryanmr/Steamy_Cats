@@ -83,4 +83,37 @@ cp /var/tmp/newconfig.vdf /home/user/.steam/steam/userdata/00/7/remote/sharedcon
 		"330"		"ALL"
 	}
 }
+"500"
+{
+	"tags"
+	{
+		"102"		"SFLAGS Co-op"
+		"104"		"SFLAGS Full controller support"
+		"301"		"PDB MODE Borked"
+		"302"		"PDB MEAN Bronze"
+		"340"		"RELEASE 2008"
+		"200"		"TAGS Zombies"
+		"201"		"TAGS Co-op"
+		"202"		"TAGS FPS"
+		"203"		"TAGS Multiplayer"
+		"204"		"TAGS Action"
+		"205"		"TAGS Shooter"
+		"206"		"TAGS Online Co-Op"
+		"207"		"TAGS Team-Based"
+		"208"		"TAGS First-Person"
+		"209"		"TAGS Horror"
+		"210"		"TAGS Survival"
+		"211"		"TAGS Post-apocalyptic"
+		"212"		"TAGS Singleplayer"
+		"213"		"TAGS Adventure"
+		"214"		"TAGS Atmospheric"
+		"215"		"TAGS Tactical"
+		"216"		"TAGS Competitive"
+		"217"		"TAGS Moddable"
+		"218"		"TAGS Female Protagonist"
+		"219"		"TAGS Replay Value"
+		"350"		"REVIEW Very Positive"
+		"330"		"ALL"
+	}
+}
 ```
