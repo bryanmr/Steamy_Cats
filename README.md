@@ -4,6 +4,8 @@ A Steam Game Category Sorter Written in Bash. This script will output the user t
 Run the script and select a user. You may also run with --help to see more options.
 
 Requires jq, Steam, and other common utilities to be installed. This script assumes Steam is located in the ~/.steam/ folder and has not been setup with Flatpaks, yet.
+## Installation
+Just download the Steamy_Cats script and run it.
 ## Help Output
 ```
 Steamy Cats is a script to categorize and organize Steam games
@@ -30,7 +32,7 @@ This script works on my Ubuntu 18.04 installation. I have not tested it elsewher
 Valve and Steam are trademarks of the Valve corporation. They have not endorsed or sanctioned the creation or usage of this script of these trademarks.
 ### Example Output of Successful Run
 ```
-Command line passed user number: 2
+# ./Steamy_Cats
 We are using: SomeUser :: 0000
 Our config file is: /home/user/.steam/steam/userdata/00/7/remote/sharedconfig.vdf
 Downloading your community profile, if public, and then getting full list of games you own
