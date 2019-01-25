@@ -1,4 +1,7 @@
 #!/bin/bash
+trap 'rm -rf "/var/tmp/Steamy_Cats/"' EXIT
+rm -rf /var/tmp/Steamy_Cats/
+mkdir -p /var/tmp/Steamy_Cats/ /var/tmp/Steamy_Cats/fragments/ /var/tmp/Steamy_Cats/rewrites/
 
 # See bottom of script for default behavior
 
@@ -8,9 +11,6 @@
 
 function parse_config()
 {
-	rm -rf /var/tmp/steamy_cats/
-	mkdir /var/tmp/steamy_cats/
-
 	# Reads from a filename passed to it
 	# No arguments available, just outputs something Bash can handle instead of VDF
 
@@ -23,10 +23,10 @@ function parse_config()
 
 	# Download the Community Profile
 	echo "Downloading your community profile, if public, and then getting full list of games you own"
-	curl -s -o /var/tmp/Steamy_Cats_Community_Profile https://steamcommunity.com/profiles/"$WEBACCNUM"/games/?tab=all
+	curl -s -o /var/tmp/Steamy_Cats/Community_Profile https://steamcommunity.com/profiles/"$WEBACCNUM"/games/?tab=all
 
 	# Find the JSON containing our games, then extract the APP ID with JQ
-	GAMESLIST="$(grep "var rgGames" /var/tmp/Steamy_Cats_Community_Profile | \
+	GAMESLIST="$(grep "var rgGames" /var/tmp/Steamy_Cats/Community_Profile | \
 		sed -e 's/var rgGames \= \[//' -e 's/\]\;//' -e 's/\,[{]/\n\{/g' | jq '.appid')"
 	while read -r appid
 	do
@@ -35,7 +35,7 @@ function parse_config()
 			printf "\t\t\t\t\t{\n"
 			printf "\t\t\t\t\t\t\"%s\"\n" "tags"
 			printf "\t\t\t\t\t\t{\n"
-		} > /var/tmp/steamy_cats/"$appid"
+		} > /var/tmp/Steamy_Cats/fragments/"$appid"
 	done <<< "$GAMESLIST"
 
 	if [ "$FRESH_CONFIG" == "true" ]
@@ -54,7 +54,7 @@ function parse_config()
 			exit 1
 		fi
 
-		echo "$OURSECTION" > /var/tmp/steamy_cats/"$1"
+		echo "$OURSECTION" > /var/tmp/Steamy_Cats/fragments/"$1"
 
 		# Sometimes games don't have tags but other configs
 		# This adds the tags section at the end
@@ -63,7 +63,7 @@ function parse_config()
 			{
 				printf "\t\t\t\t\t\t\"%s\"\n" "tags"
 				printf "\t\t\t\t\t\t{\n"
-			} >> /var/tmp/steamy_cats/"$1"
+			} >> /var/tmp/Steamy_Cats/fragments/"$1"
 		fi
 	}
 
@@ -144,7 +144,7 @@ function download_store()
 	DOWNLOADING=0
 	DL_LIST=""
 
-	cd /var/tmp/steamy_cats || exit
+	cd /var/tmp/Steamy_Cats/fragments || exit
 	echo "Gathering the list of files to download from Steam now!"
 	for i in *
 	do 
@@ -189,11 +189,11 @@ function download_store()
 	if [ "$1" == "--api" ]
 	then
 		# Some entries have no release date
-		cat -- * | jq -j 'keys[] as $k | "\($k)~\(.[].data.release_date.date[-4:])\n"' > /var/tmp/Steamy_Cats_Release_Year
-		cat -- * | jq -r 'keys[] as $k | $k + "~" + .[].data.categories[]?.description' > /var/tmp/Steamy_Cats_Flags
+		cat -- * | jq -j 'keys[] as $k | "\($k)~\(.[].data.release_date.date[-4:])\n"' > /var/tmp/Steamy_Cats/Release_Year
+		cat -- * | jq -r 'keys[] as $k | $k + "~" + .[].data.categories[]?.description' > /var/tmp/Steamy_Cats/Flags
 	elif [ "$1" == "--front" ]
 	then
-		grep -A1 "Overall Reviews:" -- * | grep "game_review_summary" | grep -v "Need more user reviews" | sed 's/\..*\">/~/' | cut -d\< -f1 > /var/tmp/Steamy_Cats_Reviews
+		grep -A1 "Overall Reviews:" -- * | grep "game_review_summary" | grep -v "Need more user reviews" | sed 's/\..*\">/~/' | cut -d\< -f1 > /var/tmp/Steamy_Cats/Reviews
 	fi
 
 	echo "Downloads complete for the $EXITMESSAGE."
@@ -207,17 +207,17 @@ function make_categories()
 {
 	function makeflags
 	{
-		if ! grep -q "^$1~" /var/tmp/Steamy_Cats_Flags
+		if ! grep -q "^$1~" /var/tmp/Steamy_Cats/Flags
 		then
-			printf "\t\t\t\t\t\t\t\"%s\"\t\t\"%s\"\n" "100" "SFLAGS NONE" >> /var/tmp/steamy_cats/"$1"
+			printf "\t\t\t\t\t\t\t\"%s\"\t\t\"%s\"\n" "100" "SFLAGS NONE" >> /var/tmp/Steamy_Cats/fragments/"$1"
 			return
 		fi
 
-		FLAGS="$(grep "^$1~" /var/tmp/Steamy_Cats_Flags | cut -d~ -f2)"
+		FLAGS="$(grep "^$1~" /var/tmp/Steamy_Cats/Flags | cut -d~ -f2)"
 		VALNUM=100
 		while read -r line
 		do
-			printf "\t\t\t\t\t\t\t\"%s\"\t\t\"SFLAGS %s\"\n" "$VALNUM" "$line" >> /var/tmp/steamy_cats/"$1"
+			printf "\t\t\t\t\t\t\t\"%s\"\t\t\"SFLAGS %s\"\n" "$VALNUM" "$line" >> /var/tmp/Steamy_Cats/fragments/"$1"
 			let VALNUM=$VALNUM+1
 		done <<< "$FLAGS"
 	}
@@ -226,13 +226,13 @@ function make_categories()
 	{
 		if grep -q "You must login to see this content." "$HOME/.local/share/steam_store_frontend/$1.html"
 		then
-			printf "\t\t\t\t\t\t\t\"%s\"\t\t\"%s\"\n" "320" "SFLAGS ADULT" >> /var/tmp/steamy_cats/"$1"
+			printf "\t\t\t\t\t\t\t\"%s\"\t\t\"%s\"\n" "320" "SFLAGS ADULT" >> /var/tmp/Steamy_Cats/fragments/"$1"
 			return
 		fi
 
 		if ! grep -q "\[{\"tagid\":" "$HOME/.local/share/steam_store_frontend/$1.html"
                 then
-                        printf "\t\t\t\t\t\t\t\"%s\"\t\t\"%s\"\n" "200" "TAGS NONE" >> /var/tmp/steamy_cats/"$1"
+                        printf "\t\t\t\t\t\t\t\"%s\"\t\t\"%s\"\n" "200" "TAGS NONE" >> /var/tmp/Steamy_Cats/fragments/"$1"
                         return
                 fi
 
@@ -240,7 +240,7 @@ function make_categories()
 		VALNUM=200
 		while read -r line
 		do
-			printf "\t\t\t\t\t\t\t\"%s\"\t\t\"TAGS %s\"\n" "$VALNUM" "$line" >> /var/tmp/steamy_cats/"$1"
+			printf "\t\t\t\t\t\t\t\"%s\"\t\t\"TAGS %s\"\n" "$VALNUM" "$line" >> /var/tmp/Steamy_Cats/fragments/"$1"
 			let VALNUM=$VALNUM+1
 		done <<< "$TAGS"
 	}
@@ -251,7 +251,7 @@ function make_categories()
 		# Else check Proton DB ratings
 		if grep -q '"linux":true' "$HOME/.local/share/steam_store_api_json/$1.html"
 		then
-			printf "\t\t\t\t\t\t\t\"%s\"\t\t\"APP NATIVE LINUX\"\n" "301" >> /var/tmp/steamy_cats/"$1"
+			printf "\t\t\t\t\t\t\t\"%s\"\t\t\"APP NATIVE LINUX\"\n" "301" >> /var/tmp/Steamy_Cats/fragments/"$1"
 		else
 			write_proton_db_scores "$1"
 		fi
@@ -259,28 +259,28 @@ function make_categories()
 
 	function makerelease
 	{
-		if ! grep -q "^$1~" /var/tmp/Steamy_Cats_Release_Year
+		if ! grep -q "^$1~" /var/tmp/Steamy_Cats/Release_Year
 		then
-			printf "\t\t\t\t\t\t\t\"%s\"\t\t\"%s\"\n" "340" "RELEASE UNKNOWN" >> /var/tmp/steamy_cats/"$1"
+			printf "\t\t\t\t\t\t\t\"%s\"\t\t\"%s\"\n" "340" "RELEASE UNKNOWN" >> /var/tmp/Steamy_Cats/fragments/"$1"
 		else
-			RELYEAR="$(grep "^$1~" /var/tmp/Steamy_Cats_Release_Year | cut -d~ -f2)"
+			RELYEAR="$(grep "^$1~" /var/tmp/Steamy_Cats/Release_Year | cut -d~ -f2)"
 			if [ "$RELYEAR" == "null" ]
 			then
-				printf "\t\t\t\t\t\t\t\"%s\"\t\t\"%s\"\n" "340" "RELEASE UNKNOWN" >> /var/tmp/steamy_cats/"$1"
+				printf "\t\t\t\t\t\t\t\"%s\"\t\t\"%s\"\n" "340" "RELEASE UNKNOWN" >> /var/tmp/Steamy_Cats/fragments/"$1"
 			else
-				printf "\t\t\t\t\t\t\t\"%s\"\t\t\"%s\"\n" "340" "RELEASE $RELYEAR" >> /var/tmp/steamy_cats/"$1"
+				printf "\t\t\t\t\t\t\t\"%s\"\t\t\"%s\"\n" "340" "RELEASE $RELYEAR" >> /var/tmp/Steamy_Cats/fragments/"$1"
 			fi
 		fi
 	}
 
 	function makereviews
 	{
-		if ! grep -q "^$1~" /var/tmp/Steamy_Cats_Reviews
+		if ! grep -q "^$1~" /var/tmp/Steamy_Cats/Reviews
 		then
 			return
 		else
-			REVIEW="$(grep "^$1~" /var/tmp/Steamy_Cats_Reviews | cut -d~ -f2)"
-			printf "\t\t\t\t\t\t\t\"%s\"\t\t\"%s\"\n" "350" "REVIEW $REVIEW" >> /var/tmp/steamy_cats/"$1"
+			REVIEW="$(grep "^$1~" /var/tmp/Steamy_Cats/Reviews | cut -d~ -f2)"
+			printf "\t\t\t\t\t\t\t\"%s\"\t\t\"%s\"\n" "350" "REVIEW $REVIEW" >> /var/tmp/Steamy_Cats/fragments/"$1"
 		fi
 	}
 
@@ -292,8 +292,8 @@ function make_categories()
 			tagnative "$1"
 			makerelease "$1"
 		else
-			printf "\t\t\t\t\t\t\t\"%s\"\t\t\"%s\"\n" "100" "SFLAGS NONE" >> /var/tmp/steamy_cats/"$1"
-			printf "\t\t\t\t\t\t\t\"%s\"\t\t\"%s\"\n" "101" "RELEASE UNKNOWN" >> /var/tmp/steamy_cats/"$1"
+			printf "\t\t\t\t\t\t\t\"%s\"\t\t\"%s\"\n" "100" "SFLAGS NONE" >> /var/tmp/Steamy_Cats/fragments/"$1"
+			printf "\t\t\t\t\t\t\t\"%s\"\t\t\"%s\"\n" "101" "RELEASE UNKNOWN" >> /var/tmp/Steamy_Cats/fragments/"$1"
 			write_proton_db_scores "$1"
 		fi
 
@@ -303,32 +303,32 @@ function make_categories()
 			makereviews "$1"
 		else
 			echo "~FAILED~" > "$HOME/.local/share/steam_store_frontend/$1.html"
-			printf "\t\t\t\t\t\t\t\"%s\"\t\t\"%s\"\n" "200" "TAGS NONE" >> /var/tmp/steamy_cats/"$1"
+			printf "\t\t\t\t\t\t\t\"%s\"\t\t\"%s\"\n" "200" "TAGS NONE" >> /var/tmp/Steamy_Cats/fragments/"$1"
 		fi
 		
 		# Write the all group and final bracket
 		{
 			printf "\t\t\t\t\t\t\t\"%s\"\t\t\"ALL\"\n" "330"
 			printf "\t\t\t\t\t\t}\n"
-		} >> /var/tmp/steamy_cats/"$1"
+		} >> /var/tmp/Steamy_Cats/fragments/"$1"
 
 
 		# Fixing our handling of the Hidden field
-		if grep -q $'\t\t\t\t\t"Hidden"\t\t"' /var/tmp/steamy_cats/"$1"
+		if grep -q $'\t\t\t\t\t"Hidden"\t\t"' /var/tmp/Steamy_Cats/fragments/"$1"
 		then
-			HIDDENLINE=$(grep $'\t\t\t\t\t"Hidden"' /var/tmp/steamy_cats/"$1")
-			grep -hv $'\t\t\t\t\t"Hidden"' /var/tmp/steamy_cats/"$1" > /var/tmp/Steamy_Cats_Rewrite."$1"
-			cp /var/tmp/Steamy_Cats_Rewrite."$1" /var/tmp/steamy_cats/"$1"
-			echo "$HIDDENLINE" >> /var/tmp/steamy_cats/"$1"
+			HIDDENLINE=$(grep $'\t\t\t\t\t"Hidden"' /var/tmp/Steamy_Cats/fragments/"$1")
+			grep -hv $'\t\t\t\t\t"Hidden"' /var/tmp/Steamy_Cats/fragments/"$1" > /var/tmp/Steamy_Cats/rewrites/"$1"
+			cp /var/tmp/Steamy_Cats/rewrites/"$1" /var/tmp/Steamy_Cats/fragments/"$1"
+			echo "$HIDDENLINE" >> /var/tmp/Steamy_Cats/fragments/"$1"
 		fi
 
-		printf "\t\t\t\t\t}\n" >> /var/tmp/steamy_cats/"$1"
+		printf "\t\t\t\t\t}\n" >> /var/tmp/Steamy_Cats/fragments/"$1"
 	}
 
 	# Main entry logic just calls function above a bunch
 	echo "Adding new category tags to the games!"
 
-	cd /var/tmp/steamy_cats/ || exit
+	cd /var/tmp/Steamy_Cats/fragments/ || exit
 	for i in *
 	do
 		if [ "$SEQUENTIAL" == "true" ]
@@ -347,19 +347,20 @@ function make_categories()
 
 function download_proton_db()
 {
+	PDBLOC="$HOME/.local/share/protondb-data/"
 	function check_pdb
 	{
-		if [ ! -d /var/tmp/protondb-data/ ]
+		if [ ! -d "$PDBLOC" ]
 		then
-			cd /var/tmp/ || exit 1
+			cd "$HOME"/.local/share/ || exit 1
 			echo "Downloading Proton DB Info using Git"
 			git clone https://github.com/bdefore/protondb-data.git &> /dev/null || exit 1
 		fi
 	}
-	rm -f /var/tmp/protondb-data/reports/reports_piiremoved.json /var/tmp/steamy_pdb
+	rm -f "$PDBLOC"/reports/reports_piiremoved.json
 
 	check_pdb
-	cd /var/tmp/protondb-data/reports || exit 1
+	cd "$PDBLOC"/reports || exit 1
 
 	YEAR=$(find . | cut -d_ -f3 | sort -ru | head -n1)
 	MONTH=$(find . | grep "$YEAR" | cut -d_ -f2 | sort -Mr | head -n1 | cut -b1-3)
@@ -368,10 +369,10 @@ function download_proton_db()
 	if [ "$MONTH" != "$(date +%b | tr '[:upper:]' '[:lower:]')" ]
 	then
 		cd ../.. || exit 1
-		rm -rf /var/tmp/protondb-data/
+		rm -rf "$PDBLOC"
 		check_pdb
 
-		cd /var/tmp/protondb-data/reports || exit 1
+		cd "$PDBLOC"/reports || exit 1
 		YEAR=$(find . | cut -d_ -f3 | sort -ru | head -n1)
 		MONTH=$(find . | grep "$YEAR" | cut -d_ -f2 | sort -Mr | head -n1)
 	fi
@@ -379,20 +380,20 @@ function download_proton_db()
 	TAR_FILENAME=$(find . | grep "$YEAR" | grep "$MONTH")
 	echo "Most recent ProtonDB file appears to be: $TAR_FILENAME"
 	tar -zxvf "$TAR_FILENAME" > /dev/null || exit 1
-	jq -r '.[] | [.appId, .rating] | join(",")' /var/tmp/protondb-data/reports/reports_piiremoved.json > /var/tmp/steamy_pdb
+	jq -r '.[] | [.appId, .rating] | join(",")' "$PDBLOC"/reports/reports_piiremoved.json > /var/tmp/Steamy_Cats/PDB.json
 }
 
 function write_proton_db_scores()
 {
 	# Mode
 	PDBNUM=0
-	if ! grep -q "^$1" /var/tmp/steamy_pdb
+	if ! grep -q "^$1" /var/tmp/Steamy_Cats/PDB.json
 	then
-		printf "\t\t\t\t\t\t\t\"%s\"\t\t\"PDB UNRATED\"\n" "301" >> /var/tmp/steamy_cats/"$1"
+		printf "\t\t\t\t\t\t\t\"%s\"\t\t\"PDB UNRATED\"\n" "301" >> /var/tmp/Steamy_Cats/fragments/"$1"
 		return
 	else
-		PDB_MODE="$(grep "^$1" /var/tmp/steamy_pdb | sort | uniq -c | sort -nr | head -n1 | cut -d, -f2)"
-		printf "\t\t\t\t\t\t\t\"%s\"\t\t\"PDB MODE %s\"\n" "301" "$PDB_MODE" >> /var/tmp/steamy_cats/"$1"
+		PDB_MODE="$(grep "^$1" /var/tmp/Steamy_Cats/PDB.json | sort | uniq -c | sort -nr | head -n1 | cut -d, -f2)"
+		printf "\t\t\t\t\t\t\t\"%s\"\t\t\"PDB MODE %s\"\n" "301" "$PDB_MODE" >> /var/tmp/Steamy_Cats/fragments/"$1"
 		let PDBNUM=$PDBNUM+1
 	fi
 
@@ -426,24 +427,24 @@ function write_proton_db_scores()
 		esac
 
 		TOTAL=$(( TOTAL+MULT1*MULT2 ))
-	done <<< "$(grep "^$1" /var/tmp/steamy_pdb | sort | uniq -c)"
+	done <<< "$(grep "^$1" /var/tmp/Steamy_Cats/PDB.json | sort | uniq -c)"
 	RAWMEAN=$(( TOTAL/NUMVALS ))
 	ROUNDMEAN=$(awk '{print int($1+0.5)}' <<< "$RAWMEAN")
 	case $ROUNDMEAN in
 		4)
-			printf "\t\t\t\t\t\t\t\"%s\"\t\t\"PDB MEAN Platinum\"\n" "302" >> /var/tmp/steamy_cats/"$1"
+			printf "\t\t\t\t\t\t\t\"%s\"\t\t\"PDB MEAN Platinum\"\n" "302" >> /var/tmp/Steamy_Cats/fragments/"$1"
 			;;
 		3)
-			printf "\t\t\t\t\t\t\t\"%s\"\t\t\"PDB MEAN Gold\"\n" "302" >> /var/tmp/steamy_cats/"$1"
+			printf "\t\t\t\t\t\t\t\"%s\"\t\t\"PDB MEAN Gold\"\n" "302" >> /var/tmp/Steamy_Cats/fragments/"$1"
 			;;
 		2)
-			printf "\t\t\t\t\t\t\t\"%s\"\t\t\"PDB MEAN Silver\"\n" "302" >> /var/tmp/steamy_cats/"$1"
+			printf "\t\t\t\t\t\t\t\"%s\"\t\t\"PDB MEAN Silver\"\n" "302" >> /var/tmp/Steamy_Cats/fragments/"$1"
 			;;
 		1)
-			printf "\t\t\t\t\t\t\t\"%s\"\t\t\"PDB MEAN Bronze\"\n" "302" >> /var/tmp/steamy_cats/"$1"
+			printf "\t\t\t\t\t\t\t\"%s\"\t\t\"PDB MEAN Bronze\"\n" "302" >> /var/tmp/Steamy_Cats/fragments/"$1"
 			;;
 		0)
-			printf "\t\t\t\t\t\t\t\"%s\"\t\t\"PDB MEAN Borked\"\n" "302" >> /var/tmp/steamy_cats/"$1"
+			printf "\t\t\t\t\t\t\t\"%s\"\t\t\"PDB MEAN Borked\"\n" "302" >> /var/tmp/Steamy_Cats/fragments/"$1"
 			;;
 		*)
 			echo "Somehow our math failed"
@@ -463,7 +464,7 @@ function category_list()
 	echo "# To skip over unwanted categories, save category names to ~/.config/Steamy_Cats/exclude.conf"
 	echo "# To limit the list to only those you want to include, save category names to ~/.config/Steamy_Cats/include.conf"
 	echo "# Lines with comments will be ignored."
-	cat /var/tmp/steamy_cats/* /var/tmp/newconfig.vdf | grep -P $'\t\t\t\t\t\t\t\"\d*\"\t\t\"(?!favorite)' | cut -d\" -f4 | sort -u
+	cat /var/tmp/Steamy_Cats/fragments/* /var/tmp/newconfig.vdf | grep -P $'\t\t\t\t\t\t\t\"\d*\"\t\t\"(?!favorite)' | cut -d\" -f4 | sort -u
 }
 
 #######################################################################################
@@ -483,24 +484,49 @@ function assemble_steam_config()
 	if [ -f "$INCLUDE_FILE" ]
 	then
 		# We are going to get a diff of what we have and what we want, then get rid of the difference
-		cat /var/tmp/steamy_cats/* | grep -P $'\t\t\t\t\t\t\t\"\d*\"\t\t\"(?!favorite)' | cut -d\" -f4 | sort -u > /var/tmp/Steamy_Cats_List
-		grep -v "^#" "$INCLUDE_FILE" > /var/tmp/Steamy_Cats_Includes
-		grep -hvf /var/tmp/Steamy_Cats_Includes /var/tmp/Steamy_Cats_List > /var/tmp/Steamy_Cats_Diff
-		grep -vhf /var/tmp/Steamy_Cats_Diff /var/tmp/steamy_cats/* > /var/tmp/tempconfig.vdf
+		cat /var/tmp/Steamy_Cats/fragments/* | grep -P $'\t\t\t\t\t\t\t\"\d*\"\t\t\"(?!favorite)' | cut -d\" -f4 | sort -u > /var/tmp/Steamy_Cats/List
+		grep -v "^#" "$INCLUDE_FILE" > /var/tmp/Steamy_Cats/Includes
+		grep -hvf /var/tmp/Steamy_Cats/Includes /var/tmp/Steamy_Cats/List > /var/tmp/Steamy_Cats/Diff
+		grep -vhf /var/tmp/Steamy_Cats/Diff /var/tmp/Steamy_Cats/fragments/* > /var/tmp/Steamy_Cats/tempconfig.vdf
 	else
-		cat /var/tmp/steamy_cats/* > /var/tmp/tempconfig.vdf
+		cat /var/tmp/Steamy_Cats/fragments/* > /var/tmp/Steamy_Cats/tempconfig.vdf
 	fi
 
 	if [ -f "$EXCLUDE_FILE" ]
 	then
-		grep -v "^#" "$EXCLUDE_FILE" > /var/tmp/Steamy_Cats_Excludes
-		grep -hvf /var/tmp/Steamy_Cats_Excludes /var/tmp/tempconfig.vdf >> /var/tmp/newconfig.vdf
+		grep -v "^#" "$EXCLUDE_FILE" > /var/tmp/Steamy_Cats/Excludes
+		grep -hvf /var/tmp/Steamy_Cats/Excludes /var/tmp/Steamy_Cats/tempconfig.vdf >> /var/tmp/newconfig.vdf
 	else
-		cat /var/tmp/tempconfig.vdf >> /var/tmp/newconfig.vdf
+		cat /var/tmp/Steamy_Cats/tempconfig.vdf >> /var/tmp/newconfig.vdf
 	fi
 
 	# Adding the bottom of the config
 	tail -n+"$END_APPS" "$1" >> /var/tmp/newconfig.vdf
+}
+
+#######################################################################################
+#### Main Logic                                                                    ####
+#######################################################################################
+
+helpoutput()
+{
+	echo "Steamy Cats is a script to categorize and organize Steam games
+	Options include:
+	--debug : Turn on lots of things to exit on error and show commands being ran
+	  You should also consider --sequential with --debug for more meaningful output
+	--sequential : Runs commands one at a time instead of in parallel
+	--profiler : Prepends timestamp and shows all commands ran
+	  Intended to be redirected to file for profiling of code
+	--ignore-old-categories : Gets rid of all category configuration while retaining favorites
+	--clear-whole-config : Preserves nothing from old configuration
+	--clean-dls : Gets rid of failed downloads and tries again
+	--category-list : Returns the list of categories available
+	--user : User number to execute the script with, instead of inputting after running
+	  Usage: --user=\$USERNUM
+	--include-file : Location of the file containing a list of categories to include
+	  Usage: --include-file=\$FILENAME
+	--exclude-file : Location of the file containing a list of categories to exclude
+	  Usage: --exclude-file=\$FILENAME"
 }
 
 #######################################################################################
@@ -517,6 +543,7 @@ WIPE_CONFIG="false"
 CLEAN_DLS="false"
 FRESH_CONFIG="false"
 SEQUENTIAL="false"
+USERNUM="false"
 INCLUDE_FILE="$HOME/.config/Steamy_Cats/include.conf"
 EXCLUDE_FILE="$HOME/.config/Steamy_Cats/exclude.conf"
 for i in "${CLI_ARGS[@]}"
@@ -524,9 +551,14 @@ do
 	case "$i" in
 		"--debug")
 			set -uexo pipefail
+			trap 'echo "Script Exited, files not cleaned up"' EXIT
 			;;
 		"--sequential")
 			SEQUENTIAL="true"
+			;;
+		"--profiler")
+			set -x
+			PS4='+ $(date "+%s.%N ($LINENO) ")'
 			;;
 		"--ignore-old-categories")
 			WIPE_CONFIG="true"
@@ -549,38 +581,38 @@ do
 			EXCLUDE_FILE="$(cut -d= -f2 <<< "$i")"
 			echo "Removing categories found in $EXCLUDE_FILE"
 			;;
+		"--user"*)
+			USERNUM="$(cut -d= -f2 <<< "$i")"
+			echo "Command line passed user number: $USERNUM"
+			;;
 		"--help")
-			echo "--debug : Turn on lots of things to exit on error and show commands being ran"
-			echo "  You should also consider --sequential with --debug for more meaningful output"
-			echo "--sequential : Runs commands one at a time instead of in parallel"
-			echo "--ignore-old-categories : Gets rid of all category configuration while retaining favorites"
-			echo "--clear-whole-config : Preserves nothing from old configuration"
-			echo "--clean-dls : Gets rid of failed downloads and tries again"
-			echo "--category-list : Returns the list of categories available"
-			echo "--include-file : Location of the file containing a list of categories to include"
-			echo "  Usage: --include-file=\$FILENAME"
-			echo "--exclude-file : Location of the file containing a list of categories to exclude"
-			echo "  Usage: --exclude-file=\$FILENAME"
+			helpoutput
 			exit
 			;;
 		*)
 			echo "Unknown option: $i"
-			echo "Run with --help for more options"
+			helpoutput
 			exit
 			;;
 	esac
 done
 
-echo "Possible users to make Steam categories for:"
 NAMES=$(grep PersonaName ~/.steam/steam/userdata/*/config/localconfig.vdf | cut -d\" -f4)
-NUMCYCLE=1
-for i in $NAMES
-do
-	echo "$NUMCYCLE : $i"
-	let NUMCYCLE=$NUMCYCLE+1
-done
 
-read -rp "Who do you want to use? Answer: " WHICHSTEAM
+if [ "$USERNUM" == "false" ]
+then
+	echo "Possible users to make Steam categories for:"
+	NUMCYCLE=1
+	for i in $NAMES
+	do
+		echo "$NUMCYCLE : $i"
+		let NUMCYCLE=$NUMCYCLE+1
+	done
+
+	read -rp "Who do you want to use? Answer: " WHICHSTEAM
+else
+	WHICHSTEAM="$USERNUM"
+fi
 
 WHICHACC=$(echo "$NAMES" | sed -n "$WHICHSTEAM"p)
 WEBACCNUM=$(grep -B3 "$WHICHACC" ~/.steam/steam/config/loginusers.vdf | head -n1 | cut -d\" -f2)
