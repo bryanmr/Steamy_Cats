@@ -205,7 +205,7 @@ function make_categories()
 {
 	function makeflags
 	{
-		if ! grep -q "^$1~" "$HOME/.local/share/steam_store_frontend/$1.html" | grep -q 'class="name"[^\>]*\>[^\<]*'
+		if ! grep "game_area_details_specs" "$HOME/.local/share/steam_store_frontend/$1.html" | grep -q 'class="name"'
 		then
 			printf "\t\t\t\t\t\t\t\"%s\"\t\t\"%s\"\n" "100" "SFLAGS NONE" >> /var/tmp/Steamy_Cats/fragments/"$1"
 			return
@@ -246,7 +246,7 @@ function make_categories()
 	{
 		# Write if we are Linux native
 		# Else check Proton DB ratings
-		if grep -q "^$1~" /var/tmp/Steamy_Cats/Linux
+		if grep -q "^$1$" /var/tmp/Steamy_Cats/Linux
 		then
 			printf "\t\t\t\t\t\t\t\"%s\"\t\t\"APP NATIVE LINUX\"\n" "301" >> /var/tmp/Steamy_Cats/fragments/"$1"
 		else
