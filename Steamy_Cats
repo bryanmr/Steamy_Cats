@@ -373,12 +373,12 @@ function write_proton_db_scores()
 {
 	# Mode
 	PDBNUM=0
-	if ! grep -q "^$1" /var/tmp/Steamy_Cats/PDB.json
+	if ! grep -q "^$1," /var/tmp/Steamy_Cats/PDB.json
 	then
 		printf "\t\t\t\t\t\t\t\"%s\"\t\t\"PDB UNRATED\"\n" "301" >> /var/tmp/Steamy_Cats/fragments/"$1"
 		return
 	else
-		PDB_MODE="$(grep "^$1" /var/tmp/Steamy_Cats/PDB.json | sort | uniq -c | sort -nr | head -n1 | cut -d, -f2)"
+		PDB_MODE="$(grep "^$1," /var/tmp/Steamy_Cats/PDB.json | sort | uniq -c | sort -nr | head -n1 | cut -d, -f2)"
 		printf "\t\t\t\t\t\t\t\"%s\"\t\t\"PDB MODE %s\"\n" "301" "$PDB_MODE" >> /var/tmp/Steamy_Cats/fragments/"$1"
 		let PDBNUM=$PDBNUM+1
 	fi
@@ -406,14 +406,10 @@ function write_proton_db_scores()
 			"Borked")
 				MULT2=0
 				;;
-			*)
-				echo "We shouldn't reach here"
-				exit 1
-				;;
 		esac
 
 		TOTAL=$(( TOTAL+MULT1*MULT2 ))
-	done <<< "$(grep "^$1" /var/tmp/Steamy_Cats/PDB.json | sort | uniq -c)"
+	done <<< "$(grep "^$1," /var/tmp/Steamy_Cats/PDB.json | sort | uniq -c)"
 	RAWMEAN=$(( TOTAL/NUMVALS ))
 	ROUNDMEAN=$(awk '{print int($1+0.5)}' <<< "$RAWMEAN")
 	case $ROUNDMEAN in
