@@ -279,7 +279,7 @@ function make_categories()
 	function makecats
 	{
 		if [ -f "$HOME/.local/share/steam_store_frontend/$1.html" ] \
-			|| grep -q '~FAILED~' "$HOME/.local/share/steam_store_frontend/$1.html"
+			|| ! grep -q '~FAILED~' "$HOME/.local/share/steam_store_frontend/$1.html"
 		then
 			maketags "$1"
 			makeflags "$1"
