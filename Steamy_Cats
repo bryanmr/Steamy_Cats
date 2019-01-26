@@ -75,9 +75,9 @@ function parse_config()
 		if [ $END_APPS -lt $BEGIN_APPS ]
 		then
 			SECCOUNT="$(grep -c $'^\t\t\t\t}' "$1")"
-			for i in seq 2 $SECCOUNT
+			for i in $(seq 2 "$SECCOUNT")
 			do
-				let END_APPS=$(grep -n $'^\t\t\t\t}' "$1" | cut -d: -f1 | sed -n 2p)-1
+				let END_APPS=$(grep -n $'^\t\t\t\t}' "$1" | cut -d: -f1 | sed -n "$i"p)-1
 				if [ $END_APPS -gt $BEGIN_APPS ]
 				then
 					break
@@ -120,14 +120,14 @@ function parse_config()
 		wait
 	}
 
-	community_profile
+	community_profile || exit 1
 
 	# This is where we copy the old configuration
 	if [ "$FRESH_CONFIG" == "true" ]
 	then
 		return
 	else
-		copy_config "$@"
+		copy_config "$@" || exit 1
 	fi
 }
 
@@ -523,9 +523,9 @@ function assemble_steam_config()
 	if [ $END_APPS -lt $BEGIN_APPS ]
 	then
 		SECCOUNT="$(grep -c $'^\t\t\t\t}' "$1")"
-		for i in seq 2 $SECCOUNT
+		for i in $(seq 2 "$SECCOUNT")
 		do
-			let END_APPS=$(grep -n $'^\t\t\t\t}' "$1" | cut -d: -f1 | sed -n 2p)
+			let END_APPS=$(grep -n $'^\t\t\t\t}' "$1" | cut -d: -f1 | sed -n "$i"p)
 			if [ $END_APPS -gt $BEGIN_APPS ]
 			then
 				break
