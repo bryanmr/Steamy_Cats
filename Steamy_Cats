@@ -13,99 +13,122 @@ mkdir -p /var/tmp/Steamy_Cats/ /var/tmp/Steamy_Cats/fragments/ /var/tmp/Steamy_C
 
 function parse_config()
 {
-	# Reads from a filename passed to it
-	# No arguments available, just outputs something Bash can handle instead of VDF
+	function community_profile
+	{ # Run this first, it will overwrite the copy_config output
+		# Download the Community Profile
+		echo "Downloading your community profile, if public, and then getting full list of games you own"
+		curl -s -L -o /var/tmp/Steamy_Cats/Community_Profile "https://steamcommunity.com/profiles/$WEBACCNUM/games/?tab=all" || \
+			echo "Failed to download community profile"
 
-	# We skip the bracket and header
-	let BEGIN_APPS=$(grep -n \"Apps\" "$1" | cut -d: -f1)+2
-	# We skip the bracket and anything before the Apps section
-	let END_APPS=$(grep -n $'^\t\t\t\t}' "$1" | cut -d: -f1 | head -n1)-1
-	if [ $END_APPS -lt $BEGIN_APPS ]
-	then
-		let END_APPS=$(grep -n $'^\t\t\t\t}' "$1" | cut -d: -f1 | sed -n 2p)-1
-	fi
-	# Fixing the count here
-	let COUNT_LINES=END_APPS-BEGIN_APPS+1
-
-	# Download the Community Profile
-	echo "Downloading your community profile, if public, and then getting full list of games you own"
-	curl -s -L -o /var/tmp/Steamy_Cats/Community_Profile "https://steamcommunity.com/profiles/$WEBACCNUM/games/?tab=all" || \
-		echo "Failed to download community profile"
-
-	# Find the JSON containing our games, then extract the APP ID with JQ
-	GAMESLIST="$(grep "var rgGames" /var/tmp/Steamy_Cats/Community_Profile | \
-		sed -e 's/var rgGames \= \[//' -e 's/\]\;//' -e 's/\,[{]/\n\{/g' | jq '.appid')"
-	if [ "$GAMESLIST" == "" ]
-	then
-		echo "Is your community profile private?"
-		echo "We can only process games in local configs, which is not complete."
-		echo "As a workaround, you can add all games to a group and restart Steam, then we can process them."
-	else
-		while read -r appid
-		do
-			{
-				printf "\t\t\t\t\t\"%s\"\n" "$appid"
-				printf "\t\t\t\t\t{\n"
-				printf "\t\t\t\t\t\t\"%s\"\n" "tags"
-				printf "\t\t\t\t\t\t{\n"
-			} > /var/tmp/Steamy_Cats/fragments/"$appid"
-		done <<< "$GAMESLIST"
-	fi
-
-	if [ "$FRESH_CONFIG" == "true" ]
-	then
-		return
-	fi
-
-	function copyexisting
-	{
-		OURSECTION=$(grep -A100 $'^\t\t\t\t\t\"'"$1"\" <<< "$APPS_SECTION" | awk 'NR==1,/^\t\t\t\t\t}$/' | head -n -2)
-
-		if [ "$OURSECTION" == "" ]
+		# Find the JSON containing our games, then extract the APP ID with JQ
+		GAMESLIST="$(grep "var rgGames" /var/tmp/Steamy_Cats/Community_Profile | \
+			sed -e 's/var rgGames \= \[//' -e 's/\]\;//' -e 's/\,[{]/\n\{/g' | jq '.appid')"
+		if [ "$GAMESLIST" == "" ]
 		then
-			echo Severe error, skipping "$1" since it would be empty, we are working on the below section:
-			grep -A100 $'\t\t\t\t\t\"'"$1" <<< "$APPS_SECTION" | awk 'NR==1,/^\t\t\t\t\t}$/'
-			exit 1
-		fi
-
-		echo "$OURSECTION" > /var/tmp/Steamy_Cats/fragments/"$1"
-
-		# Sometimes games don't have tags but other configs
-		# This adds the tags section at the end
-		if ! grep -q $'\t\t\t\t\t\"tags\"' <<< "$OURSECTION"
-		then
-			{
-				printf "\t\t\t\t\t\t\"%s\"\n" "tags"
-				printf "\t\t\t\t\t\t{\n"
-			} >> /var/tmp/Steamy_Cats/fragments/"$1"
+			echo "Is your community profile private?"
+			echo "We can only process games in local configs, which is not complete."
+			echo "As a workaround, you can add all games to a group and restart Steam, then we can process them."
+		else
+			while read -r appid
+			do
+				{
+					printf "\t\t\t\t\t\"%s\"\n" "$appid"
+					printf "\t\t\t\t\t{\n"
+					printf "\t\t\t\t\t\t\"%s\"\n" "tags"
+					printf "\t\t\t\t\t\t{\n"
+				} > /var/tmp/Steamy_Cats/fragments/"$appid"
+			done <<< "$GAMESLIST"
 		fi
 	}
 
-	echo "Begin processing $COUNT_LINES lines of configuration in $1"
+	function copy_config
+	{
+		function write_copy
+		{
+			OURSECTION=$(grep -A100 $'^\t\t\t\t\t\"'"$1"\" <<< "$APPS_SECTION" | awk 'NR==1,/^\t\t\t\t\t}$/' | head -n -2)
 
-	if [ "$WIPE_CONFIG" == "true" ]
-	then
-		# Requires pgrep with lookahead support to preserve favorites
-		APPS_SECTION=$(head -n "$END_APPS" "$1" | tail -$COUNT_LINES | grep -Pv $'\t\t\t\t\t\t\t\"\d*\"\t\t\"(?!favorite)')
-	else
-		# We are removing categories we create here
-		APPS_SECTION=$(head -n "$END_APPS" "$1" | tail -$COUNT_LINES |\
-		       grep -v -e '"TAGS ' -e '"SFLAGS ' -e '"APP ' -e '"ALL"' -e '"PDB ' -e '"RELEASE ' -e '"REVIEW ')
-	fi
+			if [ "$OURSECTION" == "" ]
+			then
+				echo Severe error, skipping "$1" since it would be empty, we are working on the below section:
+				grep -A100 $'\t\t\t\t\t\"'"$1" <<< "$APPS_SECTION" | awk 'NR==1,/^\t\t\t\t\t}$/'
+				exit 1
+			fi
 
-	# List of game IDs
-	GAMES=$(grep $'^\t\t\t\t\t\"' <<< "$APPS_SECTION" | cut -d\" -f2)
+			echo "$OURSECTION" > /var/tmp/Steamy_Cats/fragments/"$1"
 
-	for game in $GAMES
-	do
-		if [ "$SEQUENTIAL" == "true" ]
+			# Sometimes games don't have tags but other configs
+			# This adds the tags section at the end
+			if ! grep -q $'\t\t\t\t\t\"tags\"' <<< "$OURSECTION"
+			then
+				{
+					printf "\t\t\t\t\t\t\"%s\"\n" "tags"
+					printf "\t\t\t\t\t\t{\n"
+				} >> /var/tmp/Steamy_Cats/fragments/"$1"
+			fi
+		}
+
+		# We skip the bracket and header
+		let BEGIN_APPS=$(grep -n \"Apps\" "$1" | cut -d: -f1)+2
+
+		# We skip the bracket and anything before the Apps section
+		let END_APPS=$(grep -n $'^\t\t\t\t}' "$1" | cut -d: -f1 | head -n1)-1
+		if [ $END_APPS -lt $BEGIN_APPS ]
 		then
-			copyexisting "$game"
-		else
-			copyexisting "$game" &
+			SECCOUNT="$(grep -c $'^\t\t\t\t}' "$1")"
+			for i in seq 2 $SECCOUNT
+			do
+				let END_APPS=$(grep -n $'^\t\t\t\t}' "$1" | cut -d: -f1 | sed -n 2p)-1
+				if [ $END_APPS -gt $BEGIN_APPS ]
+				then
+					break
+				fi
+			done
+			if [ $END_APPS -lt $BEGIN_APPS ]
+			then
+				echo "We can't find your config section, this is a severe error and we can't continue"
+				exit 1
+			fi
 		fi
-	done
-	wait
+
+		# Fixing the count here
+		let COUNT_LINES=END_APPS-BEGIN_APPS+1
+
+		echo "Begin processing $COUNT_LINES lines of configuration in $1"
+
+		if [ "$WIPE_CONFIG" == "true" ]
+		then
+			# Requires pgrep with lookahead support to preserve favorites
+			APPS_SECTION=$(head -n "$END_APPS" "$1" | tail -$COUNT_LINES | grep -Pv $'\t\t\t\t\t\t\t\"\d*\"\t\t\"(?!favorite)')
+		else
+			# We are removing categories we create here
+			APPS_SECTION=$(head -n "$END_APPS" "$1" | tail -$COUNT_LINES |\
+				grep -v -e '"TAGS ' -e '"SFLAGS ' -e '"APP ' -e '"ALL"' -e '"PDB ' -e '"RELEASE ' -e '"REVIEW ')
+		fi
+
+		# List of game IDs
+		GAMES=$(grep $'^\t\t\t\t\t\"' <<< "$APPS_SECTION" | cut -d\" -f2)
+
+		for game in $GAMES
+		do
+			if [ "$SEQUENTIAL" == "true" ]
+			then
+				write_copy "$game"
+			else
+				write_copy "$game" &
+			fi
+		done
+		wait
+	}
+
+	community_profile
+
+	# This is where we copy the old configuration
+	if [ "$FRESH_CONFIG" == "true" ]
+	then
+		return
+	else
+		copy_config "$@"
+	fi
 }
 
 #######################################################################################
@@ -462,6 +485,31 @@ function category_list()
 }
 
 #######################################################################################
+#### Check if the config is valid                                                  ####
+#######################################################################################
+
+function check_valid
+{
+	BRACKETS="$(tr -cd '{}' < /var/tmp/newconfig.vdf)"
+	while [[ "$BRACKETS" = *'{}'* ]]
+	do
+		BRACKETS="${BRACKETS//{}/}"
+	done
+
+	if [ "$BRACKETS" == "" ]
+	then
+		echo "The configuration has some problems with matching brackets..."
+		echo "Emergency surgery is required on the script immediately."
+		echo "Here are your brackets back: $BRACKETS"
+		exit 1
+	else
+		echo "Old config backed up to /var/tmp/oldconfig.vdf"
+		echo "New config written. To apply, run the below command:"
+		echo "cp /var/tmp/newconfig.vdf $OUR_CONFIG"
+	fi
+}
+
+#######################################################################################
 #### Assemble Final Configurations                                                 ####
 #######################################################################################
 
@@ -470,10 +518,24 @@ function assemble_steam_config()
 	echo "Creating final configuration"
 
 	let BEGIN_APPS=$(grep -n \"Apps\" "$1" | cut -d: -f1)+1
+
 	let END_APPS=$(grep -n $'^\t\t\t\t}' "$1" | cut -d: -f1 | head -n1)
 	if [ $END_APPS -lt $BEGIN_APPS ]
 	then
-		END_APPS=$(grep -n $'^\t\t\t\t}' "$1" | cut -d: -f1 | sed -n 2p)
+		SECCOUNT="$(grep -c $'^\t\t\t\t}' "$1")"
+		for i in seq 2 $SECCOUNT
+		do
+			let END_APPS=$(grep -n $'^\t\t\t\t}' "$1" | cut -d: -f1 | sed -n 2p)
+			if [ $END_APPS -gt $BEGIN_APPS ]
+			then
+				break
+			fi
+		done
+		if [ $END_APPS -lt $BEGIN_APPS ]
+		then
+			echo "We can't find your config section, this is a severe error and we can't continue"
+			exit 1
+		fi
 	fi
 
 	# Attaching the top of the config
@@ -654,12 +716,9 @@ fi
 
 cp "$OUR_CONFIG" /var/tmp/oldconfig.vdf
 
-parse_config "$OUR_CONFIG" || exit
-download_store
-download_proton_db
-make_categories "$OUR_CONFIG"
-assemble_steam_config "$OUR_CONFIG"
-
-echo "Old config backed up to /var/tmp/oldconfig.vdf"
-echo "New config written. To apply, run the below command:"
-echo "cp /var/tmp/newconfig.vdf $OUR_CONFIG"
+parse_config "$OUR_CONFIG" || exit 1
+download_store || exit 1
+download_proton_db || exit 1
+make_categories "$OUR_CONFIG" || exit 1
+assemble_steam_config "$OUR_CONFIG" || exit 1
+check_valid || exit 1
