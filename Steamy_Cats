@@ -626,7 +626,7 @@ echo "Our config file is: $OUR_CONFIG"
 
 if [ ! -e "$OUR_CONFIG" ]
 then
-	echo "We can't find the config file."
+	echo "We can't find the config file: $OUR_CONFIG"
 	echo "This is important, so we are quitting."
 	exit
 fi
