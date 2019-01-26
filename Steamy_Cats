@@ -111,6 +111,13 @@ function download_store()
 			grep -Zl '>Error<' -- * | xargs --null rm
 		fi
 
+		# Files from being rate limited should be deleted
+		if grep -q '>Access Denied<' -- *
+		then
+			echo "Deleting $(grep 'TITLE>Access Denied<' -- * | wc -l) files"
+			grep -Zl '>Access Denied<' -- * | xargs --null rm
+		fi
+
 		# This is set through a CLI switch
 		if [ "$CLEAN_DLS" == "true" ]
 		then
@@ -159,7 +166,12 @@ function download_store()
 		fi
 	done
 
-	echo "Downloading files for these game IDs: $DL_LIST" && echo
+	if [ "$(wc -w <<< "$DL_LIST")" -gt 50 ]
+	then
+		echo "Downloading $(wc -w <<< "$DL_LIST") files" && echo
+	else
+		echo "Downloading files for these game IDs: $DL_LIST" && echo
+	fi
 
 	DOWNLOADED=0
 	for i in $DL_LIST
