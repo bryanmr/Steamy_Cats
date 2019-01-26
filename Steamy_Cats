@@ -604,7 +604,7 @@ then
 fi
 
 WHICHACC=$(echo "$NAMES" | sed -n "$WHICHSTEAM"p)
-WEBACCNUM=$(grep -B3 "$WHICHACC" ~/.steam/steam/config/loginusers.vdf | head -n1 | cut -d\" -f2)
+WEBACCNUM=$(grep -FB3 "$WHICHACC" ~/.steam/steam/config/loginusers.vdf | head -n1 | cut -d\" -f2)
 
 echo "We are using: $WHICHACC :: $WEBACCNUM"
 
