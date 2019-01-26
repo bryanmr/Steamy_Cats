@@ -31,15 +31,22 @@ function parse_config()
 	# Find the JSON containing our games, then extract the APP ID with JQ
 	GAMESLIST="$(grep "var rgGames" /var/tmp/Steamy_Cats/Community_Profile | \
 		sed -e 's/var rgGames \= \[//' -e 's/\]\;//' -e 's/\,[{]/\n\{/g' | jq '.appid')"
-	while read -r appid
-	do
-		{
-			printf "\t\t\t\t\t\"%s\"\n" "$appid"
-			printf "\t\t\t\t\t{\n"
-			printf "\t\t\t\t\t\t\"%s\"\n" "tags"
-			printf "\t\t\t\t\t\t{\n"
-		} > /var/tmp/Steamy_Cats/fragments/"$appid"
-	done <<< "$GAMESLIST"
+	if [ "$GAMESLIST" == "" ]
+	then
+		echo "Is your community profile private?"
+		echo "We can only process games in local configs, which is not complete."
+		echo "As a workaround, you can add all games to a group and restart Steam, then we can process them."
+	else
+		while read -r appid
+		do
+			{
+				printf "\t\t\t\t\t\"%s\"\n" "$appid"
+				printf "\t\t\t\t\t{\n"
+				printf "\t\t\t\t\t\t\"%s\"\n" "tags"
+				printf "\t\t\t\t\t\t{\n"
+			} > /var/tmp/Steamy_Cats/fragments/"$appid"
+		done <<< "$GAMESLIST"
+	fi
 
 	if [ "$FRESH_CONFIG" == "true" ]
 	then
