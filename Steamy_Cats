@@ -611,9 +611,16 @@ then
 		let NUMCYCLE=$NUMCYCLE+1
 	done
 
-	read -rp "Who do you want to use? Answer: " WHICHSTEAM
+	read -rp "Enter the number for the user you want to use. Answer: " WHICHSTEAM
 else
 	WHICHSTEAM="$USERNUM"
+fi
+
+num='^[0-9]+$'
+if ! [[ $WHICHSTEAM =~ $num ]]
+then
+	echo "Response must be a number. Run the script again."
+	exit 1
 fi
 
 WHICHACC=$(echo "$NAMES" | sed -n "$WHICHSTEAM"p)
