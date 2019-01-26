@@ -19,9 +19,11 @@ function parse_config()
 	# We skip the bracket and header
 	let BEGIN_APPS=$(grep -n \"Apps\" "$1" | cut -d: -f1)+2
 	# We skip the bracket and anything before the Apps section
-	let END_APPS2=$(tail -n +"$BEGIN_APPS" "$1" | grep -n $'^\t\t\t\t}' | cut -d: -f1 | head -n1)-1
 	let END_APPS=$(grep -n $'^\t\t\t\t}' "$1" | cut -d: -f1 | head -n1)-1
-	echo "Now: $END_APPS :: New: $END_APPS2"
+	if [ $END_APPS -lt $BEGIN_APPS ]
+	then
+		let END_APPS=$(grep -n $'^\t\t\t\t}' "$1" | cut -d: -f1 | sed -n 2p)-1
+	fi
 	# Fixing the count here
 	let COUNT_LINES=END_APPS-BEGIN_APPS+1
 
@@ -468,9 +470,11 @@ function assemble_steam_config()
 	echo "Creating final configuration"
 
 	let BEGIN_APPS=$(grep -n \"Apps\" "$1" | cut -d: -f1)+1
-	let END_APPS2=$(tail -n +"$BEGIN_APPS" "$1" | grep -n $'^\t\t\t\t}' | cut -d: -f1 | head -n1)
 	let END_APPS=$(grep -n $'^\t\t\t\t}' "$1" | cut -d: -f1 | head -n1)
-	echo "Now: $END_APPS :: New: $END_APPS2"
+	if [ $END_APPS -lt $BEGIN_APPS ]
+	then
+		END_APPS=$(grep -n $'^\t\t\t\t}' "$1" | cut -d: -f1 | sed -n 2p)
+	fi
 
 	# Attaching the top of the config
 	head -n"$BEGIN_APPS" "$1" > /var/tmp/newconfig.vdf
