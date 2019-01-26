@@ -579,17 +579,17 @@ do
 	esac
 done
 
-NAMES=$(grep PersonaName ~/.steam/steam/userdata/*/config/localconfig.vdf | cut -d\" -f4)
+NAMES="$(grep PersonaName ~/.steam/steam/userdata/*/config/localconfig.vdf | cut -d\" -f4)"
 
 if [ "$USERNUM" == "false" ]
 then
 	echo "Possible users to make Steam categories for:"
 	NUMCYCLE=1
-	for i in $NAMES
+	while read -r line
 	do
-		echo "$NUMCYCLE : $i"
+		echo "$NUMCYCLE : $line"
 		let NUMCYCLE=$NUMCYCLE+1
-	done
+	done <<< "$NAMES"
 
 	read -rp "Enter the number for the user you want to use. Answer: " WHICHSTEAM
 else
