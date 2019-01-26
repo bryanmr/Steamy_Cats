@@ -29,7 +29,7 @@ Steamy Cats is a script to categorize and organize Steam games
 ### Disclaimer
 This script works on my Ubuntu 18.04 installation. I have not tested it elsewhere.
 
-Valve and Steam are trademarks of the Valve corporation. They have not endorsed or sanctioned the creation or usage of this script of these trademarks.
+Valve and Steam are trademarks of the Valve corporation. They have not endorsed or sanctioned the creation or usage of this script or of these trademarks.
 ### Image of Generated Library
 ![Example Image of Steam Library](Example.png?raw=true "Example Image")
 ### Example Output of Successful Run
@@ -43,10 +43,6 @@ Gathering the list of files to download from Steam now!
 Downloading files for these game IDs: 
 
 Downloads complete for the Steam Store User Readable Page.
-Gathering the list of files to download from Steam now!
-Downloading files for these game IDs: 
-
-Downloads complete for the Steam Store API.
 Most recent ProtonDB file appears to be: ./reports_jan1_2019.tar.gz
 Adding new category tags to the games!
 Creating final configuration
