@@ -104,6 +104,7 @@ function download_store()
 {
 	function cleandls
 	{
+		find "$DLOC" -size -27c -type f -delete
 		# Deleting failed downloads to try again
 		cd "$DLOC" || exit 1
 		if grep -q '>Error<' -- *
@@ -114,7 +115,8 @@ function download_store()
 		# Files from being rate limited should be deleted
 		if grep -q '>Access Denied<' -- *
 		then
-			echo "Deleting $(grep 'TITLE>Access Denied<' -- * | wc -l) files"
+			GREPCOUNT=$(grep 'TITLE>Access Denied<' -- *)
+			echo "Deleting $(wc -l <<< "$GREPCOUNT") files"
 			grep -Zl '>Access Denied<' -- * | xargs --null rm
 		fi
 
@@ -126,7 +128,6 @@ function download_store()
 				grep -Zl -e '~FAILED~' -e '"success":false}' -- * | xargs --null rm
 			fi
 			find "$DLOC" -empty -type f -delete
-			# find "$DLOC" -size -32c -type f -delete
 		fi
 	}
 
@@ -188,6 +189,23 @@ function download_store()
 			echo "SLEEPING (DL RATE LIMIT) $DL_COUNT downloads started of $DOWNLOADING total"
 			wait
 			sleep 1
+		fi
+
+		let LONG_SLEEP=$DOWNLOADED%200
+		if [[ $LONG_SLEEP -eq 0 ]] && [ "$1" == "--api" ]
+		then
+			let DL_COUNT=$DOWNLOADED-1
+			tput cuu 1 && tput el # Using this to overwrite previous line
+			echo "5 MINUTE SLEEP (DL RATE LIMIT) $DL_COUNT downloads started of $DOWNLOADING total" && echo
+			wait
+			for y in $(seq 300)
+			do
+				tput cuu 1 && tput el # Using this to overwrite previous line
+				echo "Sleeping $y seconds of 300 (DL RATE LIMIT)"
+				sleep 1
+			done
+			# Clearing the line above
+			tput cuu 1 && tput el # Using this to overwrite previous line
 		fi
 
 		curl -L --cookie "mature_content=1 ; birthtime=-729000000" -s -o "$DLOC""$i".html "$TLOC$i" &
