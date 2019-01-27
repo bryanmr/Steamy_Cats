@@ -1,7 +1,14 @@
 #!/bin/bash
+set -uEeo pipefail
 if ! type jq > /dev/null; then echo Script requires jq to be installed; fi
 if ! type git > /dev/null; then echo Script requires git to be installed; fi
+
+this_command="false"
+previous_command="false"
+trap 'previous_command=$this_command; this_command=$BASH_COMMAND' DEBUG
 trap 'rm -rf "/var/tmp/Steamy_Cats/"' EXIT
+trap 'echo "Exit Code: $? ~~ Last Command: $previous_command"' ERR
+
 rm -rf /var/tmp/Steamy_Cats/
 mkdir -p /var/tmp/Steamy_Cats/ /var/tmp/Steamy_Cats/fragments/ /var/tmp/Steamy_Cats/rewrites/
 
@@ -120,14 +127,14 @@ function parse_config()
 		wait
 	}
 
-	community_profile || exit 1
+	community_profile || (echo "Failed to write community profile" ; exit 1)
 
 	# This is where we copy the old configuration
 	if [ "$FRESH_CONFIG" == "true" ]
 	then
 		return
 	else
-		copy_config "$@" || exit 1
+		copy_config "$@" || (echo "Failed to copy old configuration" ; exit 1)
 	fi
 }
 
@@ -178,7 +185,7 @@ function download_store()
 	DOWNLOADING=0
 	DL_LIST=""
 
-	cd /var/tmp/Steamy_Cats/fragments || exit
+	cd /var/tmp/Steamy_Cats/fragments || exit 1
 	echo "Gathering the list of files to download from Steam now!"
 	for i in *
 	do 
@@ -349,7 +356,7 @@ function make_categories()
 	# Main entry logic just calls function above a bunch
 	echo "Adding new category tags to the games!"
 
-	cd /var/tmp/Steamy_Cats/fragments/ || exit
+	cd /var/tmp/Steamy_Cats/fragments/ || exit 1
 	for i in *
 	do
 		if [ "$SEQUENTIAL" == "true" ]
@@ -656,7 +663,7 @@ for i in "${CLI_ARGS[@]}"
 do
 	case "$i" in
 		"--debug")
-			set -uexo pipefail
+			set -x
 			trap 'echo "Script Exited, files not cleaned up"' EXIT
 			;;
 		"--sequential")
