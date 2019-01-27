@@ -22,19 +22,25 @@ function parse_config()
 {
 	function community_profile
 	{ # Run this first, it will overwrite the copy_config output
-		# Download the Community Profile
-		echo "Downloading your community profile, if public, and then getting full list of games you own"
-		curl -s -L -o /var/tmp/Steamy_Cats/Community_Profile "https://steamcommunity.com/profiles/$WEBACCNUM/games/?tab=all" || \
-			(echo "Failed to download community profile" ; exit 1)
+		if [ "$COMM_DOWNLOAD" == "false" ]
+		then
+			echo "Downloading your community profile, if public, and then getting full list of games you own"
+			curl -s -L -o /var/tmp/Steamy_Cats/Community_Profile "https://steamcommunity.com/profiles/$WEBACCNUM/games/?tab=all" || \
+				(echo "Failed to download community profile" ; exit 1)
+		else
+			cp "$COMM_DOWNLOAD" /var/tmp/Steamy_Cats/Community_Profile || (echo "Failed to copy community profile" ; exit 1)
+		fi
 
 		# Find the JSON containing our games, then extract the APP ID with JQ
 		GAMESLIST="$(grep "var rgGames" /var/tmp/Steamy_Cats/Community_Profile | \
 			sed -e 's/var rgGames \= \[//' -e 's/\]\;//' -e 's/\,[{]/\n\{/g' | jq '.appid')"
 		if [ "$GAMESLIST" == "" ]
 		then
-			echo "Is your community profile private?"
-			echo "We can only process games in local configs, which is not complete."
-			echo "As a workaround, you can add all games to a group and restart Steam, then we can process them."
+			tput bold
+			echo "Is your community profile private? Check in a private browser: https://steamcommunity.com/id/yourid/games/?tab=all"
+			echo "You can download the file manually and run the script with --comm-html=/path/to/file"
+			echo "Alternatively, you can add all games to a group so they show up in your local configuration"
+			tput sgr0
 		else
 			while read -r appid
 			do
@@ -592,6 +598,8 @@ function helpoutput()
 	  Usage: --vdf-file=/path/to/file.vdf
 	--steam-user-id : The numeric USER ID for your Steam account
 	  Usage: --steam-user-id=77777777777777777
+	--comm-html : Download your own community page instead of making it public
+	  Usage: --comm-html=/path/to/steamcommunity.html
 	--user : User number to execute the script with, instead of inputting after running
 	  Usage: --user=\$USERNUM
 	--include-file : Location of the file containing a list of categories to include
@@ -657,6 +665,7 @@ SEQUENTIAL="false"
 USERNUM="false"
 VDFOVERRIDE="false"
 WEBACCNUM="false"
+COMM_DOWNLOAD="false"
 INCLUDE_FILE="$HOME/.config/Steamy_Cats/include.conf"
 EXCLUDE_FILE="$HOME/.config/Steamy_Cats/exclude.conf"
 for i in "${CLI_ARGS[@]}"
@@ -693,6 +702,11 @@ do
 		"--steam-user-id"*)
 			WEBACCNUM="$(cut -d= -f2 <<< "$i")"
 			echo "Using the Steam User ID $WEBACCNUM"
+			;;
+		"--comm-html"*)
+			COMM_DOWNLOAD="$(cut -d= -f2 <<< "$i")"
+			COMM_DOWNLOAD="${COMM_DOWNLOAD/#\~/$HOME}"
+			echo "Using the Steam Community HTML at $COMM_DOWNLOAD"
 			;;
 		"--include-file"*)
 			INCLUDE_FILE="$(cut -d= -f2 <<< "$i")"
