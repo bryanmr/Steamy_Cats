@@ -710,10 +710,12 @@ do
 			;;
 		"--include-file"*)
 			INCLUDE_FILE="$(cut -d= -f2 <<< "$i")"
+			INCLUDE_FILE="${INCLUDE_FILE/#\~/$HOME}"
 			echo "Only including categories found in $INCLUDE_FILE"
 			;;
 		"--exclude-file"*)
 			EXCLUDE_FILE="$(cut -d= -f2 <<< "$i")"
+			EXCLUDE_FILE="${EXCLUDE_FILE/#\~/$HOME}"
 			echo "Removing categories found in $EXCLUDE_FILE"
 			;;
 		"--user"*)
