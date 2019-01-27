@@ -581,6 +581,10 @@ function helpoutput()
 	--clear-whole-config : Preserves nothing from old configuration
 	--clean-dls : Gets rid of failed downloads and tries again
 	--category-list : Returns the list of categories available
+	--vdf-file : Name of a VDF configuration to use instead of the script discovered one
+	  Usage: --vdf-file=/path/to/file.vdf
+	--steam-user-id : The numeric USER ID for your Steam account
+	  Usage: --steam-user-id=77777777777777777
 	--user : User number to execute the script with, instead of inputting after running
 	  Usage: --user=\$USERNUM
 	--include-file : Location of the file containing a list of categories to include
@@ -644,6 +648,8 @@ CLEAN_DLS="false"
 FRESH_CONFIG="false"
 SEQUENTIAL="false"
 USERNUM="false"
+VDFOVERRIDE="false"
+WEBACCNUM="false"
 INCLUDE_FILE="$HOME/.config/Steamy_Cats/include.conf"
 EXCLUDE_FILE="$HOME/.config/Steamy_Cats/exclude.conf"
 for i in "${CLI_ARGS[@]}"
@@ -673,6 +679,14 @@ do
 			category_list
 			exit
 			;;
+		"--vdf-file"*)
+			VDFOVERRIDE="$( cut -d= -f2 <<< "$i")"
+			echo "Using the VDF Config file $VDFOVERRIDE"
+			;;
+		"--steam-user-id"*)
+			WEBACCNUM="$(cut -d= -f2 <<< "$i")"
+			echo "Using the Steam User ID $WEBACCNUM"
+			;;
 		"--include-file"*)
 			INCLUDE_FILE="$(cut -d= -f2 <<< "$i")"
 			echo "Only including categories found in $INCLUDE_FILE"
@@ -697,24 +711,31 @@ do
 	esac
 done
 
-# Parse out which user directory we are using
-which_user
-
-# We should check to see if the username can be found in users
-# If the name has been changed and no Steam restart, had an error
-if grep -qFB3 "$WHICHACC" ~/.steam/steam/config/loginusers.vdf
+if [ "$VDFOVERRIDE" == "false" ]
 then
-	WEBACCNUM=$(grep -FB3 "$WHICHACC" ~/.steam/steam/config/loginusers.vdf | head -n1 | cut -d\" -f2)
+	# Parse out which user directory we are using
+	which_user
+
+	# We should check to see if the username can be found in users
+	# If the name has been changed and no Steam restart, had an error
+	if grep -qFB3 "$WHICHACC" ~/.steam/steam/config/loginusers.vdf
+	then
+		WEBACCNUM=$(grep -FB3 "$WHICHACC" ~/.steam/steam/config/loginusers.vdf | head -n1 | cut -d\" -f2)
+	else
+		echo "We can't find your username, try restarting Steam"
+		echo "This can happen if you changed your username or have not logged in for a while"
+		exit 1
+	fi
+
+	echo "We are using: $WHICHACC :: $WEBACCNUM"
+
+	OUR_CONFIG="$(grep -H PersonaName ~/.steam/steam/userdata/*/config/localconfig.vdf | sed -n "$WHICHSTEAM"p \
+		| cut -d: -f1 | sed 's/config\/localconfig\.vdf//')7/remote/sharedconfig.vdf"
 else
-	echo "We can't find your username, try restarting Steam"
-	echo "This can happen if you changed your username or have not logged in for a while"
-	exit 1
+	OUR_CONFIG="$VDFOVERRIDE"
+	echo "Not discovering Steam User ID Number, set with --steam-user-id switch"
+	echo "Currently set to: $WEBACCNUM"
 fi
-
-echo "We are using: $WHICHACC :: $WEBACCNUM"
-
-OUR_CONFIG="$(grep -H PersonaName ~/.steam/steam/userdata/*/config/localconfig.vdf | sed -n "$WHICHSTEAM"p \
-	| cut -d: -f1 | sed 's/config\/localconfig\.vdf//')7/remote/sharedconfig.vdf"
 
 echo "Our config file is: $OUR_CONFIG"
 
@@ -722,10 +743,10 @@ if [ ! -e "$OUR_CONFIG" ]
 then
 	echo "We can't find the config file: $OUR_CONFIG"
 	echo "This is important, so we are quitting."
-	exit
+	exit 1
 fi
 
-cp "$OUR_CONFIG" /var/tmp/oldconfig.vdf
+cp "$OUR_CONFIG" /var/tmp/oldconfig.vdf || (echo "Copying config failed, not doing anything more" ; exit 1)
 
 parse_config "$OUR_CONFIG" || exit 1
 download_store || exit 1
