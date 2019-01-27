@@ -18,7 +18,7 @@ function parse_config()
 		# Download the Community Profile
 		echo "Downloading your community profile, if public, and then getting full list of games you own"
 		curl -s -L -o /var/tmp/Steamy_Cats/Community_Profile "https://steamcommunity.com/profiles/$WEBACCNUM/games/?tab=all" || \
-			echo "Failed to download community profile"
+			(echo "Failed to download community profile" ; exit 1)
 
 		# Find the JSON containing our games, then extract the APP ID with JQ
 		GAMESLIST="$(grep "var rgGames" /var/tmp/Steamy_Cats/Community_Profile | \
@@ -44,7 +44,7 @@ function parse_config()
 	function copy_config
 	{
 		function write_copy
-		{
+		{ # We call this once per game to write the section we will use
 			OURSECTION=$(grep -A100 $'^\t\t\t\t\t\"'"$1"\" <<< "$APPS_SECTION" | awk 'NR==1,/^\t\t\t\t\t}$/' | head -n -2)
 
 			if [ "$OURSECTION" == "" ]
@@ -112,9 +112,9 @@ function parse_config()
 		do
 			if [ "$SEQUENTIAL" == "true" ]
 			then
-				write_copy "$game"
+				write_copy "$game" || (echo "Writing config info for $GAMES failed" ; exit 1)
 			else
-				write_copy "$game" &
+				write_copy "$game" || (echo "Writing config info for $GAMES failed" ; exit 1) &
 			fi
 		done
 		wait
@@ -354,9 +354,9 @@ function make_categories()
 	do
 		if [ "$SEQUENTIAL" == "true" ]
 		then
-			makecats "$i"
+			makecats "$i" || (echo "Writing Tag and Flags for $i failed" ; exit 1)
 		else
-			makecats "$i" &
+			makecats "$i" || (echo "Writing Tag and Flags for $i failed" ; exit 1) &
 		fi
 	done
 	wait
@@ -400,7 +400,7 @@ function download_proton_db()
 
 	TAR_FILENAME=$(find . | grep "$YEAR" | grep "$MONTH")
 	echo "Most recent ProtonDB file appears to be: $TAR_FILENAME"
-	tar -zxvf "$TAR_FILENAME" > /dev/null || exit 1
+	tar -zxvf "$TAR_FILENAME" > /dev/null || (echo "Untarring the ProtonDB failed somehow" ; exit 1)
 	jq -r '.[] | [.appId, .rating] | join(",")' "$PDBLOC"/reports/reports_piiremoved.json > /var/tmp/Steamy_Cats/PDB.json
 }
 
@@ -686,6 +686,7 @@ then
 
 	WHICHACC=$(echo "$NAMES" | sed -n "$WHICHSTEAM"p)
 else
+	WHICHSTEAM=1
 	WHICHACC="$NAMES"
 fi
 
