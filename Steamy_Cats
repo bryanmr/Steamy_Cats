@@ -20,6 +20,8 @@ mkdir -p /var/tmp/Steamy_Cats/ /var/tmp/Steamy_Cats/fragments/ /var/tmp/Steamy_C
 
 function parse_config()
 {
+	GAMES=""
+	GAMESLIST=""
 	function community_profile
 	{ # Run this first, it will overwrite the copy_config output
 		if [ "$COMM_DOWNLOAD" == "false" ]
@@ -106,8 +108,7 @@ function parse_config()
 		# Fixing the count here
 		let COUNT_LINES=END_APPS-BEGIN_APPS+1
 
-		echo "Begin processing $COUNT_LINES lines of configuration in $1"
-
+		# Processing original configuration, wiping if set
 		if [ "$WIPE_CONFIG" == "true" ]
 		then
 			# Requires pgrep with lookahead support to preserve favorites
@@ -138,10 +139,13 @@ function parse_config()
 	# This is where we copy the old configuration
 	if [ "$FRESH_CONFIG" == "true" ]
 	then
+		echo "Created $(wc -l <<< "$GAMESLIST") files."
 		return
 	else
 		copy_config "$@" || (echo "Failed to copy old configuration" ; exit 1)
 	fi
+
+	echo "Created $(wc -w <<< "$GAMESLIST") files :: Preserved configuration for $(wc -w <<< "$GAMES") games."
 }
 
 #######################################################################################
@@ -153,7 +157,7 @@ function download_store()
 	function cleandls
 	{
 		# Deleting failed downloads to try again
-		cd "$DLOC" || exit 1
+		cd "$DLOC" || (echo "Download location does not exist." ; exit 1)
 		if grep -q '>Error<' -- *
 		then
 			grep -Zl '>Error<' -- * | xargs --null rm
@@ -191,8 +195,8 @@ function download_store()
 	DOWNLOADING=0
 	DL_LIST=""
 
-	cd /var/tmp/Steamy_Cats/fragments || exit 1
-	echo "Gathering the list of files to download from Steam now!"
+	# We gather the list of files to be downloaded
+	cd /var/tmp/Steamy_Cats/fragments || (echo "Our fragment location is missing" ; exit 1)
 	for i in *
 	do 
 		if [ ! -e "$DLOC""$i".html ]
@@ -204,45 +208,44 @@ function download_store()
 		fi
 	done
 
-	if [ "$(wc -w <<< "$DL_LIST")" -gt 25 ]
+	if [ "$(wc -w <<< "$DL_LIST")" -lt 1 ]
 	then
-		echo "Downloading $(wc -w <<< "$DL_LIST") files" && echo
+		echo "All downloads completed already, run with --clean-dls if you want to force redownload"
 	else
-		echo "Downloading files for these game IDs: $DL_LIST" && echo
-	fi
-
-	DOWNLOADED=0
-	for i in $DL_LIST
-	do
-		let DOWNLOADED=$DOWNLOADED+1
-
-		# We check to see if we have 10 downloads going here
-		# This is due to Steam rate limiting our downloads
-		let SLEEP_NOW=$DOWNLOADED%10
-		if [[ $SLEEP_NOW -eq 0 ]]
+		if [ "$(wc -w <<< "$DL_LIST")" -gt 25 ]
 		then
-			let DL_COUNT=$DOWNLOADED-1
-			tput cuu 1 && tput el # Using this to overwrite previous line
-			echo "SLEEPING (DL RATE LIMIT) $DL_COUNT downloads started of $DOWNLOADING total"
-			wait
-			sleep 1
+			echo "Downloading $(wc -w <<< "$DL_LIST") files" && echo
+		else
+			echo "Downloading files for these game IDs: $DL_LIST" && echo
 		fi
 
-		curl -L --cookie "mature_content=1 ; birthtime=-729000000" -s -o "$DLOC""$i".html "$TLOC$i" &
-		tput cuu 1 && tput el # Using this to overwrite previous line
-		echo "$DOWNLOADED downloads started of $DOWNLOADING total"
-	done
+		DOWNLOADED=0
+		for i in $DL_LIST
+		do
+			let DOWNLOADED=$DOWNLOADED+1
 
-	wait
+			# We check to see if we have 10 downloads going here
+			# This is due to Steam rate limiting our downloads
+			let SLEEP_NOW=$DOWNLOADED%10
+			if [[ $SLEEP_NOW -eq 0 ]]
+			then
+				let DL_COUNT=$DOWNLOADED-1
+				tput cuu 1 && tput el # Using this to overwrite previous line
+				echo "SLEEPING (DL RATE LIMIT) $DL_COUNT downloads started of $DOWNLOADING total"
+				wait
+				sleep 1
+			fi
 
-	cleandls
+			curl -L --cookie "mature_content=1 ; birthtime=-729000000" -s -o "$DLOC""$i".html "$TLOC$i" &
+			tput cuu 1 && tput el # Using this to overwrite previous line
+			echo "$DOWNLOADED downloads started of $DOWNLOADING total"
+		done
 
-	# Parse this information here, so we have an easy search later
-	grep "<b>Release Date:" -- * | sed -nr 's/([0-9]*\.).*([0-9]{4}).*/\1\2/p' > /var/tmp/Steamy_Cats/Release_Year
-	grep -l 'data-os="linux">' -- * | cut -d. -f1 > /var/tmp/Steamy_Cats/Linux
-	grep -A1 "Overall Reviews:" -- * | grep "game_review_summary" | grep -v "Need more user reviews" | sed 's/\..*\">/~/' | cut -d\< -f1 > /var/tmp/Steamy_Cats/Reviews
+		wait
 
-	echo "Downloads complete for the Store Frontend."
+		cleandls
+		echo "Downloads complete for the Store Frontend."
+	fi
 }
 
 #######################################################################################
@@ -362,7 +365,12 @@ function make_categories()
 	# Main entry logic just calls function above a bunch
 	echo "Adding new category tags to the games!"
 
-	cd /var/tmp/Steamy_Cats/fragments/ || exit 1
+	# Prepare the information for parsing
+	grep "<b>Release Date:" -- * | sed -nr 's/([0-9]*\.).*([0-9]{4}).*/\1\2/p' > /var/tmp/Steamy_Cats/Release_Year
+	grep -l 'data-os="linux">' -- * | cut -d. -f1 > /var/tmp/Steamy_Cats/Linux
+	grep -A1 "Overall Reviews:" -- * | grep "game_review_summary" | grep -v "Need more user reviews" | sed 's/\..*\">/~/' | cut -d\< -f1 > /var/tmp/Steamy_Cats/Reviews
+
+	cd /var/tmp/Steamy_Cats/fragments/ || (echo "Our fragment location is missing" ; exit 1)
 	for i in *
 	do
 		if [ "$SEQUENTIAL" == "true" ]
@@ -386,15 +394,15 @@ function download_proton_db()
 	{
 		if [ ! -d "$PDBLOC" ]
 		then
-			cd "$HOME"/.local/share/ || exit 1
+			cd "$HOME"/.local/share/ || (echo ".local/share does not exist, exiting" ; exit 1)
 			echo "Downloading Proton DB Info using Git"
-			git clone https://github.com/bdefore/protondb-data.git &> /dev/null || exit 1
+			git clone https://github.com/bdefore/protondb-data.git &> /dev/null || (echo "Cannot download ProtonDB, error" ; exit 1)
 		fi
 	}
 	rm -f "$PDBLOC"/reports/reports_piiremoved.json
 
 	check_pdb
-	cd "$PDBLOC"/reports || exit 1
+	cd "$PDBLOC"/reports || (echo "Proton DB download does not exit, error" ; exit 1)
 
 	YEAR=$(find . | cut -d_ -f3 | sort -ru | head -n1)
 	MONTH=$(find . | grep "$YEAR" | cut -d_ -f2 | sort -Mr | head -n1 | cut -b1-3)
@@ -402,11 +410,11 @@ function download_proton_db()
 	# If there is a new Proton DB, we should try to get it
 	if [ "$MONTH" != "$(date +%b | tr '[:upper:]' '[:lower:]')" ]
 	then
-		cd ../.. || exit 1
+		cd ../.. || (echo "Failed to move up directories" ; exit 1)
 		rm -rf "$PDBLOC"
 		check_pdb
 
-		cd "$PDBLOC"/reports || exit 1
+		cd "$PDBLOC"/reports || (echo "Reports folder does not exist for ProtonDB" ; exit 1)
 		YEAR=$(find . | cut -d_ -f3 | sort -ru | head -n1)
 		MONTH=$(find . | grep "$YEAR" | cut -d_ -f2 | sort -Mr | head -n1)
 	fi
@@ -437,6 +445,7 @@ function write_proton_db_scores()
 	while read -r line
 	do
 		MULT1="$(awk '{print $1}' <<< "$line")"
+		MULT2="0"
 		let NUMVALS=$NUMVALS+$MULT1
 		case "$(cut -d, -f2 <<< "$line")" in
 			"Platinum")
@@ -477,7 +486,7 @@ function write_proton_db_scores()
 			printf "\t\t\t\t\t\t\t\"%s\"\t\t\"PDB MEAN Borked\"\n" "302" >> /var/tmp/Steamy_Cats/fragments/"$1"
 			;;
 		*)
-			echo "Somehow our math failed"
+			echo "Somehow our math failed for ProtonDB"
 			exit 1
 			;;
 	esac
@@ -609,47 +618,76 @@ function helpoutput()
 }
 
 #######################################################################################
-#### Get Which User                                                                ####
+#### Find our config                                                               ####
 #######################################################################################
 
-function which_user
+function find_config
 {
-	NAMES="$(grep PersonaName ~/.steam/steam/userdata/*/config/localconfig.vdf | cut -d\" -f4)"
-	NUMNAMES="$(wc -l <<< "$NAMES")"
+	function which_user
+	{ # Function to learn which user we are using
+		NAMES="$(grep PersonaName ~/.steam/steam/userdata/*/config/localconfig.vdf | cut -d\" -f4)"
+		NUMNAMES="$(wc -l <<< "$NAMES")"
 
-	if [ "$NUMNAMES" -gt 1 ]
-	then
-		if [ "$USERNUM" == "false" ]
+		if [ "$NUMNAMES" -gt 1 ]
 		then
-			echo "$NUMNAMES possible users to make Steam categories for:"
-			NUMCYCLE=1
-			while read -r line
-			do
-				echo "$NUMCYCLE : $line"
-				let NUMCYCLE=$NUMCYCLE+1
-			done <<< "$NAMES"
+			if [ "$USERNUM" == "false" ]
+			then
+				echo "$NUMNAMES possible users to make Steam categories for:"
+				NUMCYCLE=1
+				while read -r line
+				do
+					echo "$NUMCYCLE : $line"
+					let NUMCYCLE=$NUMCYCLE+1
+				done <<< "$NAMES"
 
-			read -rp "Enter the number for the user you want to use. Answer: " WHICHSTEAM
+				read -rp "Enter the number for the user you want to use. Answer: " WHICHSTEAM
+			else
+				WHICHSTEAM="$USERNUM"
+			fi
+
+			num='^[0-9]+$'
+			if ! [[ $WHICHSTEAM =~ $num ]]
+			then
+				echo "Response must be a number. Run the script again."
+				exit 1
+			fi
+
+			WHICHACC=$(echo "$NAMES" | sed -n "$WHICHSTEAM"p)
 		else
-			WHICHSTEAM="$USERNUM"
+			WHICHSTEAM=1
+			WHICHACC="$NAMES"
 		fi
+	}
 
-		num='^[0-9]+$'
-		if ! [[ $WHICHSTEAM =~ $num ]]
+	if [ "$VDFOVERRIDE" == "false" ]
+	then
+		# Parse out which user directory we are using
+		which_user
+
+		# We should check to see if the username can be found in users
+		# If the name has been changed and no Steam restart, had an error
+		if grep -qFB3 "$WHICHACC" ~/.steam/steam/config/loginusers.vdf
 		then
-			echo "Response must be a number. Run the script again."
+			WEBACCNUM=$(grep -FB3 "$WHICHACC" ~/.steam/steam/config/loginusers.vdf | head -n1 | cut -d\" -f2)
+		else
+			echo "We can't find your username, try restarting Steam"
+			echo "This can happen if you changed your username or have not logged in for a while"
 			exit 1
 		fi
 
-		WHICHACC=$(echo "$NAMES" | sed -n "$WHICHSTEAM"p)
+		echo "We are using: $WHICHACC :: $WEBACCNUM"
+
+		OUR_CONFIG="$(grep -H PersonaName ~/.steam/steam/userdata/*/config/localconfig.vdf | sed -n "$WHICHSTEAM"p \
+			| cut -d: -f1 | sed 's/config\/localconfig\.vdf//')7/remote/sharedconfig.vdf"
 	else
-		WHICHSTEAM=1
-		WHICHACC="$NAMES"
+		OUR_CONFIG="$VDFOVERRIDE"
+		echo "Not discovering Steam User ID Number, set with --steam-user-id switch"
+		echo "Currently set to: $WEBACCNUM"
 	fi
 }
 
 #######################################################################################
-#### Main Logic                                                                    ####
+#### Variables, CLI switches, and renice                                           ####
 #######################################################################################
 
 CLI_ARGS=("$@")
@@ -734,31 +772,12 @@ do
 	esac
 done
 
-if [ "$VDFOVERRIDE" == "false" ]
-then
-	# Parse out which user directory we are using
-	which_user
+#######################################################################################
+#### Main Logic                                                                    ####
+#######################################################################################
 
-	# We should check to see if the username can be found in users
-	# If the name has been changed and no Steam restart, had an error
-	if grep -qFB3 "$WHICHACC" ~/.steam/steam/config/loginusers.vdf
-	then
-		WEBACCNUM=$(grep -FB3 "$WHICHACC" ~/.steam/steam/config/loginusers.vdf | head -n1 | cut -d\" -f2)
-	else
-		echo "We can't find your username, try restarting Steam"
-		echo "This can happen if you changed your username or have not logged in for a while"
-		exit 1
-	fi
-
-	echo "We are using: $WHICHACC :: $WEBACCNUM"
-
-	OUR_CONFIG="$(grep -H PersonaName ~/.steam/steam/userdata/*/config/localconfig.vdf | sed -n "$WHICHSTEAM"p \
-		| cut -d: -f1 | sed 's/config\/localconfig\.vdf//')7/remote/sharedconfig.vdf"
-else
-	OUR_CONFIG="$VDFOVERRIDE"
-	echo "Not discovering Steam User ID Number, set with --steam-user-id switch"
-	echo "Currently set to: $WEBACCNUM"
-fi
+# Identify what VDF config file we are going to use
+find_config
 
 echo "Our config file is: $OUR_CONFIG"
 
@@ -771,9 +790,22 @@ fi
 
 cp "$OUR_CONFIG" /var/tmp/oldconfig.vdf || (echo "Copying config failed, not doing anything more" ; exit 1)
 
-parse_config "$OUR_CONFIG" || exit 1
-download_store || exit 1
-download_proton_db || exit 1
-make_categories || exit 1
-assemble_steam_config "$OUR_CONFIG" || exit 1
-check_valid || exit 1
+# Make config file sections for each game
+# We also parse the current config and write it to those files
+parse_config "$OUR_CONFIG" || (echo "Could not create new config fragments" ; exit 1)
+
+# Download store pages for all the games
+download_store || (echo "Could not download Steam Store info" ; exit 1)
+
+# We download the ProtonDB info from github
+download_proton_db || (echo "Could not download ProtonDB info" ; exit 1)
+
+# This is where we parse the store pages and ProtonDB info and write it to our game files
+make_categories || (echo "Failed to make new configs for games" ; exit 1)
+
+# We take the original config and replace the "Apps" section with the one we just made
+# This function takes the start of the config, our game files, and the end and combines it
+assemble_steam_config "$OUR_CONFIG" || (echo "Failed to assemble our config" ; exit 1)
+
+# Verify our config is valid
+check_valid || (echo "Config has invalid syntax!" ; exit 1)
