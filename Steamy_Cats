@@ -800,6 +800,13 @@ fi
 
 cp "$OUR_CONFIG" /var/tmp/oldconfig.vdf || (echo "Copying config failed, not doing anything more" ; exit 1)
 
+# This should only go on the first run, saving original untouched just in case
+if [ ! -f "$OUR_CONFIG"~ ]
+then
+	echo "This is our first time running, preserving original config"
+	cp "$OUR_CONFIG" "$OUR_CONFIG"~ || (echo "Preserve Original File Failed!" ; exit 1)
+fi
+
 # Make config file sections for each game
 # We also parse the current config and write it to those files
 parse_config "$OUR_CONFIG" || (echo "Could not create new config fragments" ; exit 1)
