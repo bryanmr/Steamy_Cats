@@ -365,7 +365,8 @@ function make_categories()
 	# Main entry logic just calls function above a bunch
 	echo "Adding new category tags to the games!"
 
-	# Prepare the information for parsing
+	# Prepare the release year, Linux native, and review information for parsing
+	cd $HOME/.local/share/steam_store_frontend/ || (echo "Downloads location does not exist, can't parse" ; exit 1)
 	grep "<b>Release Date:" -- * | sed -nr 's/([0-9]*\.).*([0-9]{4}).*/\1\2/p' > /var/tmp/Steamy_Cats/Release_Year
 	grep -l 'data-os="linux">' -- * | cut -d. -f1 > /var/tmp/Steamy_Cats/Linux
 	grep -A1 "Overall Reviews:" -- * | grep "game_review_summary" | grep -v "Need more user reviews" | sed 's/\..*\">/~/' | cut -d\< -f1 > /var/tmp/Steamy_Cats/Reviews
@@ -521,6 +522,11 @@ function check_valid
 	do
 		BRACKETS="${BRACKETS//{}/}"
 	done
+
+	PDB_PLAT="$(grep PDB\ MODE\ Platinum /var/tmp/newconfig.vdf | sort -n | uniq -c | awk '{print  $1}')"
+	NATIVECOUNT="$(grep APP\ NATIVE\ LINUX /var/tmp/newconfig.vdf | sort -n | uniq -c | awk '{print  $1}')"
+	
+	echo "PDB Platinum Ratings: $PDB_PLAT :: Native Games: $NATIVECOUNT"
 
 	if [ "$BRACKETS" == "" ]
 	then
