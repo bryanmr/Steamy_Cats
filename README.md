@@ -19,12 +19,19 @@ Steamy Cats is a script to categorize and organize Steam games
 	--clear-whole-config : Preserves nothing from old configuration
 	--clean-dls : Gets rid of failed downloads and tries again
 	--category-list : Returns the list of categories available
+	--vdf-file : Name of a VDF configuration to use instead of the script discovered one
+	  Usage: --vdf-file=/path/to/file.vdf
+	--steam-user-id : The numeric USER ID for your Steam account
+	  Usage: --steam-user-id=77777777777777777
+	--comm-html : Download your own community page instead of making it public
+	  Usage: --comm-html=/path/to/steamcommunity.html
 	--user : User number to execute the script with, instead of inputting after running
 	  Usage: --user=$USERNUM
 	--include-file : Location of the file containing a list of categories to include
 	  Usage: --include-file=$FILENAME
 	--exclude-file : Location of the file containing a list of categories to exclude
 	  Usage: --exclude-file=$FILENAME
+
 ```
 ### Disclaimer
 This script works on my Ubuntu 18.04 installation. I have not tested it elsewhere.
@@ -34,20 +41,25 @@ Valve and Steam are trademarks of the Valve corporation. They have not endorsed 
 ![Example Image of Steam Library](Example.png?raw=true "Example Image")
 ### Example Output of Successful Run
 ```
-# ./Steamy_Cats
-We are using: SomeUser :: 0000
-Our config file is: /home/user/.steam/steam/userdata/00/7/remote/sharedconfig.vdf
+bryan@Ace:~/git/Steamy_Cats$ ./Steamy_Cats
+4 possible users to make Steam categories for:
+1 : USER
+2 : USER
+3 : USER
+4 : USER
+Enter the number for the user you want to use. Answer: 2
+We are using: USER :: 77777777777777
+Our config file is: /home/bryan/.steam/steam/userdata/00000000/7/remote/sharedconfig.vdf
 Downloading your community profile, if public, and then getting full list of games you own
-Begin processing 45717 lines of configuration in /home/user/.steam/steam/userdata/00/7/remote/sharedconfig.vdf
-Gathering the list of files to download from Steam now!
-Downloading files for these game IDs: 
-
-Downloads complete for the Steam Store User Readable Page.
+Created 1903 files :: Preserved configuration for 1903 games.
+All downloads completed already, run with --clean-dls if you want to force redownload
 Most recent ProtonDB file appears to be: ./reports_jan1_2019.tar.gz
 Adding new category tags to the games!
 Creating final configuration
+PDB Platinum Ratings: 462 :: Native Games: 789
+Old config backed up to /var/tmp/oldconfig.vdf
 New config written. To apply, run the below command:
-cp /var/tmp/newconfig.vdf /home/user/.steam/steam/userdata/00/7/remote/sharedconfig.vdf
+cp /var/tmp/newconfig.vdf /home/bryan/.steam/steam/userdata/00000000/7/remote/sharedconfig.vdf
 ```
 ### Sample VDF Output
 ```
