@@ -445,8 +445,6 @@ function write_proton_db_scores()
 	while read -r line
 	do
 		MULT1="$(awk '{print $1}' <<< "$line")"
-		MULT2="0"
-		let NUMVALS=$NUMVALS+$MULT1
 		case "$(cut -d, -f2 <<< "$line")" in
 			"Platinum")
 				MULT2=4
@@ -463,8 +461,14 @@ function write_proton_db_scores()
 			"Borked")
 				MULT2=0
 				;;
+			*)
+				# We set this so we don't have blank reviews counted as borked
+				MULT1=0
+				MULT2="0"
+				;;
 		esac
 
+		let NUMVALS=$NUMVALS+$MULT1
 		TOTAL=$(( TOTAL+MULT1*MULT2 ))
 	done <<< "$(grep "^$1," /var/tmp/Steamy_Cats/PDB.json | sort | uniq -c)"
 	RAWMEAN=$(( TOTAL/NUMVALS ))
