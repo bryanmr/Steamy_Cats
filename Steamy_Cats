@@ -35,7 +35,7 @@ function parse_config()
 
 		# Find the JSON containing our games, then extract the APP ID with JQ
 		GAMESLIST="$(grep "var rgGames" /var/tmp/Steamy_Cats/Community_Profile | \
-			sed -e 's/var rgGames \= \[//' -e 's/\]\;//' -e 's/\,[{]/\n\{/g' | jq '.appid')"
+			sed -e 's/var rgGames \= \[//' -e 's/\]\;//' -e 's/\,[{]/\n\{/g' | jq '.appid' | grep '[0-9]*')"
 		if [ "$GAMESLIST" == "" ]
 		then
 			tput bold
@@ -82,10 +82,10 @@ function parse_config()
 			fi
 		}
 
-		# We skip the bracket and header
+		# We skip the bracket and "Apps" line
 		let BEGIN_APPS=$(grep -n \"Apps\" "$1" | cut -d: -f1)+2
 
-		# We skip the bracket and anything before the Apps section
+		# We subtract one, since we don't want to include the bracket
 		let END_APPS=$(grep -n $'^\t\t\t\t}' "$1" | cut -d: -f1 | head -n1)-1
 		if [ $END_APPS -lt $BEGIN_APPS ]
 		then
@@ -120,7 +120,7 @@ function parse_config()
 		fi
 
 		# List of game IDs
-		GAMES=$(grep $'^\t\t\t\t\t\"' <<< "$APPS_SECTION" | cut -d\" -f2)
+		GAMES=$(grep $'^\t\t\t\t\t\"[0-9]' <<< "$APPS_SECTION" | cut -d\" -f2)
 
 		for game in $GAMES
 		do
