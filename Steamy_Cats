@@ -517,16 +517,20 @@ function category_list()
 
 function check_valid
 {
-	BRACKETS="$(tr -cd '{}' < /var/tmp/newconfig.vdf)"
+
+	# If we are looking at the new config, do a count of what we have
+	if [ "$1" == "/var/tmp/newconfig" ]
+	then
+		PDB_PLAT="$(grep PDB\ MODE\ Platinum /var/tmp/newconfig.vdf | sort -n | uniq -c | awk '{print  $1}')"
+		NATIVECOUNT="$(grep APP\ NATIVE\ LINUX /var/tmp/newconfig.vdf | sort -n | uniq -c | awk '{print  $1}')"
+		echo "PDB Platinum Ratings: $PDB_PLAT :: Native Games: $NATIVECOUNT"
+	fi
+
+	BRACKETS="$(tr -cd '{}' < "$1")"
 	while [[ "$BRACKETS" = *'{}'* ]]
 	do
 		BRACKETS="${BRACKETS//{}/}"
 	done
-
-	PDB_PLAT="$(grep PDB\ MODE\ Platinum /var/tmp/newconfig.vdf | sort -n | uniq -c | awk '{print  $1}')"
-	NATIVECOUNT="$(grep APP\ NATIVE\ LINUX /var/tmp/newconfig.vdf | sort -n | uniq -c | awk '{print  $1}')"
-	
-	echo "PDB Platinum Ratings: $PDB_PLAT :: Native Games: $NATIVECOUNT"
 
 	if [ "$BRACKETS" == "" ]
 	then
@@ -798,6 +802,13 @@ then
 	exit 1
 fi
 
+if ! check_valid "$OUR_CONFIG"
+then
+	tput bold
+	echo "The configuration at $OUR_CONFIG fails validation"
+	tput sgr0
+fi
+
 cp "$OUR_CONFIG" /var/tmp/oldconfig.vdf || (echo "Copying config failed, not doing anything more" ; exit 1)
 
 # This should only go on the first run, saving original untouched just in case
@@ -825,4 +836,4 @@ make_categories || (echo "Failed to make new configs for games" ; exit 1)
 assemble_steam_config "$OUR_CONFIG" || (echo "Failed to assemble our config" ; exit 1)
 
 # Verify our config is valid
-check_valid || (echo "Config has invalid syntax!" ; exit 1)
+check_valid "/var/tmp/newconfig.vdf" || (echo "Config has invalid syntax!" ; exit 1)
