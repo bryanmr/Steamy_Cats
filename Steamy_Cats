@@ -297,7 +297,7 @@ function make_categories()
   {
     # Write if we are Linux native
     # Else check Proton DB ratings
-    if grep -q "^$1$" /var/tmp/Steamy_Cats/Linux || grep -q "^$1$" /var/tmp/Steamy_Cats/Linux2
+    if grep -q -e "^$1$" -e "\"$1\"" /var/tmp/Steamy_Cats/Linux /var/tmp/Steamy_Cats/Linux2 "$HOME"/.local/share/SteamLinux.json
     then
       printf "\t\t\t\t\t\t\t\"%s\"\t\t\"APP NATIVE LINUX\"\n" "301" >> /var/tmp/Steamy_Cats/fragments/"$1"
     else
@@ -370,15 +370,16 @@ function make_categories()
 # Main entry logic just calls function above a bunch
 echo "Adding new category tags to the games!"
 
-# Prepare the release year, Linux native, and review information for parsing
+# Get files ready to know if we are Linux native
+# We do three methods, since the labeling here sucks
 cd "$HOME"/.local/share/steam_store_frontend/ || (echo "Downloads location does not exist, can't parse" ; exit 1)
-grep -H "<b>Release Date:" -- * | sed -nr 's/([0-9]*\.).*([0-9]{4}).*/\1\2/p' > /var/tmp/Steamy_Cats/Release_Year
 grep -Hl 'data-os="linux">' -- * | cut -d. -f1 > /var/tmp/Steamy_Cats/Linux
-while read -r filen
-do
-  grep -H '<div class="game_area_purchase_platform">' "$filen" | head -n 1 |\
-    grep '<span class="platform_img linux">' | cut -d. -f2 | cut -d/ -f2 >> /var/tmp/Steamy_Cats/Linux2
-done <<< "$(find .)"
+grep -m1 -H '<div class="game_area_purchase_platform">' -- * |\
+  grep '<span class="platform_img linux">' | cut -d. -f1 >> /var/tmp/Steamy_Cats/Linux2
+curl -s -o "$HOME"/.local/share/SteamLinux.json https://raw.githubusercontent.com/SteamDatabase/SteamLinux/master/GAMES.json
+
+# Release date and reviews
+grep -H "<b>Release Date:" -- * | sed -nr 's/([0-9]*\.).*([0-9]{4}).*/\1\2/p' > /var/tmp/Steamy_Cats/Release_Year
 grep -HA1 "Overall Reviews:" -- * | grep "game_review_summary" | grep -v "Need more user reviews" | sed 's/\..*\">/~/' | cut -d\< -f1 > /var/tmp/Steamy_Cats/Reviews
 
 cd /var/tmp/Steamy_Cats/fragments/ || (echo "Our fragment location is missing" ; exit 1)
