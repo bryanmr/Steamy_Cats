@@ -20,8 +20,7 @@ mkdir -p /var/tmp/Steamy_Cats/ /var/tmp/Steamy_Cats/fragments/ /var/tmp/Steamy_C
 
 function parse_config()
 {
-  GAMES=""
-  GAMESLIST=""
+  local GAMES="" GAMESLIST="" APPS_SECTION appid game
   function community_profile
   { # Run this first, it will overwrite the copy_config output
     if [ "$COMM_DOWNLOAD" == "false" ]
@@ -58,8 +57,10 @@ function parse_config()
 
   function copy_config
   {
+    local BEGIN_APPS END_APPS SECCOUNT COUNT_LINES i
     function write_copy
     { # We call this once per game to write the section we will use
+      local OURSECTION
       OURSECTION=$(grep -A100 $'^\t\t\t\t\t\"'"$1"\" <<< "$APPS_SECTION" | awk 'NR==1,/^\t\t\t\t\t}$/' | head -n -2)
 
       if [ "$OURSECTION" == "" ]
@@ -154,6 +155,11 @@ function parse_config()
 
 function download_store()
 {
+  local DLOC="$HOME/.local/share/steam_store_frontend/" \
+  TLOC="https://store.steampowered.com/app/" \
+  NUMEXISTS=0 DOWNLOADING=0 DL_LIST="" GREPCOUNT DOWNLOADED=0 \
+  DL_COUNT SLEEP_NOW i
+
   function cleandls
   {
     # Deleting failed downloads to try again
@@ -185,15 +191,8 @@ function download_store()
     fi
   }
 
-  DLOC="$HOME/.local/share/steam_store_frontend/"
-  TLOC="https://store.steampowered.com/app/"
-
   mkdir -p "$DLOC"
   cleandls
-
-  NUMEXISTS=0
-  DOWNLOADING=0
-  DL_LIST=""
 
   # We gather the list of files to be downloaded
   cd /var/tmp/Steamy_Cats/fragments || (echo "Our fragment location is missing" ; exit 1)
@@ -219,7 +218,6 @@ function download_store()
       echo "Downloading files for these game IDs: $DL_LIST" && echo
     fi
 
-    DOWNLOADED=0
     for i in $DL_LIST
     do
       let DOWNLOADED=$DOWNLOADED+1
@@ -254,6 +252,7 @@ function download_store()
 
 function make_categories()
 {
+  local VALNUM TAGS REVIEW RELYEAR HIDDENLINE i line
   function makeflags
   {
     if ! grep "game_area_details_specs" "$HOME/.local/share/steam_store_frontend/$1.html" | grep -q 'class="name"'
@@ -401,7 +400,8 @@ wait
 
 function download_proton_db()
 {
-  PDBLOC="$HOME/.local/share/protondb-data/"
+  local YEAR MONTH PDBLOC="$HOME/.local/share/protondb-data/" \
+    TAR_FILENAME
   function check_pdb
   {
     if [ ! -d "$PDBLOC" ]
@@ -440,7 +440,8 @@ function download_proton_db()
 function write_proton_db_scores()
 {
   # Mode
-  PDBNUM=0
+  local PDBNUM=0 TOTAL=0 NUMVALS=0 \
+    MULT1 MULT2 RAWMEAN ROUNDMEAN line
   if ! grep -q "^$1," /var/tmp/Steamy_Cats/PDB.json
   then
     printf "\t\t\t\t\t\t\t\"%s\"\t\t\"PDB UNRATED\"\n" "301" >> /var/tmp/Steamy_Cats/fragments/"$1"
@@ -452,8 +453,6 @@ function write_proton_db_scores()
   fi
 
   # Mean
-  TOTAL=0
-  NUMVALS=0
   while read -r line
   do
     MULT1="$(awk '{print $1}' <<< "$line")"
@@ -528,7 +527,7 @@ function category_list()
 
 function check_valid
 {
-
+  local BRACKETS PDB_PLAT NATIVECOUNT
   BRACKETS="$(tr -cd '{}' < "$1")"
   while [[ "$BRACKETS" = *'{}'* ]]
   do
@@ -562,6 +561,7 @@ function check_valid
 
 function assemble_steam_config()
 {
+  local BEGIN_APPS END_APPS SECCOUNT i
   echo "Creating final configuration"
 
   let BEGIN_APPS=$(grep -n \"Apps\" "$1" | cut -d: -f1)+1
@@ -650,6 +650,7 @@ function find_config
 {
   function which_user
   { # Function to learn which user we are using
+    local NAMES NUMNAMES line num
     NAMES="$(grep PersonaName ~/.steam/steam/userdata/*/config/localconfig.vdf | cut -d\" -f4)"
     NUMNAMES="$(wc -l <<< "$NAMES")"
 
@@ -731,9 +732,9 @@ WEBACCNUM="false"
 COMM_DOWNLOAD="false"
 INCLUDE_FILE="$HOME/.config/Steamy_Cats/include.conf"
 EXCLUDE_FILE="$HOME/.config/Steamy_Cats/exclude.conf"
-for i in "${CLI_ARGS[@]}"
+for cliarg in "${CLI_ARGS[@]}"
 do
-  case "$i" in
+  case "$cliarg" in
     "--debug")
       set -x
       trap 'echo "Script Exited, files not cleaned up"' EXIT
@@ -759,30 +760,30 @@ do
       exit
       ;;
     "--vdf-file"*)
-      VDFOVERRIDE="$( cut -d= -f2 <<< "$i")"
+      VDFOVERRIDE="$( cut -d= -f2 <<< "$cliarg")"
       echo "Using the VDF Config file $VDFOVERRIDE"
       ;;
     "--steam-user-id"*)
-      WEBACCNUM="$(cut -d= -f2 <<< "$i")"
+      WEBACCNUM="$(cut -d= -f2 <<< "$cliarg")"
       echo "Using the Steam User ID $WEBACCNUM"
       ;;
     "--comm-html"*)
-      COMM_DOWNLOAD="$(cut -d= -f2 <<< "$i")"
+      COMM_DOWNLOAD="$(cut -d= -f2 <<< "$cliarg")"
       COMM_DOWNLOAD="${COMM_DOWNLOAD/#\~/$HOME}"
       echo "Using the Steam Community HTML at $COMM_DOWNLOAD"
       ;;
     "--include-file"*)
-      INCLUDE_FILE="$(cut -d= -f2 <<< "$i")"
+      INCLUDE_FILE="$(cut -d= -f2 <<< "$cliarg")"
       INCLUDE_FILE="${INCLUDE_FILE/#\~/$HOME}"
       echo "Only including categories found in $INCLUDE_FILE"
       ;;
     "--exclude-file"*)
-      EXCLUDE_FILE="$(cut -d= -f2 <<< "$i")"
+      EXCLUDE_FILE="$(cut -d= -f2 <<< "$cliarg")"
       EXCLUDE_FILE="${EXCLUDE_FILE/#\~/$HOME}"
       echo "Removing categories found in $EXCLUDE_FILE"
       ;;
     "--user"*)
-      USERNUM="$(cut -d= -f2 <<< "$i")"
+      USERNUM="$(cut -d= -f2 <<< "$cliarg")"
       echo "Command line passed user number: $USERNUM"
       ;;
     "--help")
@@ -790,7 +791,7 @@ do
       exit
       ;;
     *)
-      echo "Unknown option: $i"
+      echo "Unknown option: $cliarg"
       helpoutput
       exit
       ;;
@@ -800,6 +801,8 @@ done
 #######################################################################################
 #### Main Logic                                                                    ####
 #######################################################################################
+
+OUR_CONFIG="Not Found"
 
 # Identify what VDF config file we are going to use
 find_config
