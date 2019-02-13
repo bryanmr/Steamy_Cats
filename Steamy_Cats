@@ -1,7 +1,28 @@
 #!/bin/bash
+# Steamy Cats is a script to organize your Steam library
+
+# You can set variables here, or pass command line arguments
+# Check --help to learn how to set the below variables
+WIPE_CONFIG="false"
+CLEAN_DLS="false"
+FRESH_CONFIG="false"
+SEQUENTIAL="false"
+USERNUM="false"
+VDFOVERRIDE="false"
+WEBACCNUM="false"
+COMM_DOWNLOAD="false"
+INCLUDE_FILE="$HOME/.config/Steamy_Cats/include.conf"
+EXCLUDE_FILE="$HOME/.config/Steamy_Cats/exclude.conf"
+
+#######################################################################################
+#### Start Script (No variables below here)                                        ####
+#######################################################################################
+
 set -uEeo pipefail
-if ! type jq > /dev/null; then echo Script requires jq to be installed; fi
-if ! type git > /dev/null; then echo Script requires git to be installed; fi
+if ! type jq > /dev/null; then
+  echo Script requires jq to be installed; exit 1; fi
+if ! type git > /dev/null; then
+  echo Script requires git to be installed; exit 1; fi
 
 this_command="false"
 previous_command="false"
@@ -10,7 +31,7 @@ trap 'rm -rf "/var/tmp/Steamy_Cats/"' EXIT
 trap '(echo "Exit Code: $? ~~ Last Command: $previous_command" ; exit 1)' ERR
 
 rm -rf /var/tmp/Steamy_Cats/
-mkdir -p /var/tmp/Steamy_Cats/ /var/tmp/Steamy_Cats/fragments/ /var/tmp/Steamy_Cats/rewrites/
+mkdir -p /var/tmp/Steamy_Cats/fragments/ /var/tmp/Steamy_Cats/rewrites/
 
 # See bottom of script for default behavior
 
@@ -20,7 +41,8 @@ mkdir -p /var/tmp/Steamy_Cats/ /var/tmp/Steamy_Cats/fragments/ /var/tmp/Steamy_C
 
 function parse_config()
 {
-  local GAMES="" GAMESLIST="" APPS_SECTION appid game
+  local GAMES="" GAMESLIST="" APPS_SECTION game appid
+
   function community_profile
   { # Run this first, it will overwrite the copy_config output
     if [ "$COMM_DOWNLOAD" == "false" ]
@@ -366,32 +388,32 @@ function make_categories()
     printf "\t\t\t\t\t}\n" >> /var/tmp/Steamy_Cats/fragments/"$1"
   }
 
-# Main entry logic just calls function above a bunch
-echo "Adding new category tags to the games!"
+  # Main entry logic just calls function above a bunch
+  echo "Adding new category tags to the games!"
 
-# Get files ready to know if we are Linux native
-# We do three methods, since the labeling here sucks
-cd "$HOME"/.local/share/steam_store_frontend/ || (echo "Downloads location does not exist, can't parse" ; exit 1)
-grep -Hl 'data-os="linux">' -- * | cut -d. -f1 > /var/tmp/Steamy_Cats/Linux
-grep -m1 -H '<div class="game_area_purchase_platform">' -- * |\
-  grep '<span class="platform_img linux">' | cut -d. -f1 >> /var/tmp/Steamy_Cats/Linux2
-curl -s -o "$HOME"/.local/share/SteamLinux.json https://raw.githubusercontent.com/SteamDatabase/SteamLinux/master/GAMES.json
+  # Get files ready to know if we are Linux native
+  # We do three methods, since the labeling here sucks
+  cd "$HOME"/.local/share/steam_store_frontend/ || (echo "Downloads location does not exist, can't parse" ; exit 1)
+  grep -Hl 'data-os="linux">' -- * | cut -d. -f1 > /var/tmp/Steamy_Cats/Linux
+  grep -m1 -H '<div class="game_area_purchase_platform">' -- * |\
+    grep '<span class="platform_img linux">' | cut -d. -f1 >> /var/tmp/Steamy_Cats/Linux2
+  curl -s -o "$HOME"/.local/share/SteamLinux.json https://raw.githubusercontent.com/SteamDatabase/SteamLinux/master/GAMES.json
 
-# Release date and reviews
-grep -H "<b>Release Date:" -- * | sed -nr 's/([0-9]*\.).*([0-9]{4}).*/\1\2/p' > /var/tmp/Steamy_Cats/Release_Year
-grep -HA1 "Overall Reviews:" -- * | grep "game_review_summary" | grep -v "Need more user reviews" | sed 's/\..*\">/~/' | cut -d\< -f1 > /var/tmp/Steamy_Cats/Reviews
+  # Release date and reviews
+  grep -H "<b>Release Date:" -- * | sed -nr 's/([0-9]*\.).*([0-9]{4}).*/\1\2/p' > /var/tmp/Steamy_Cats/Release_Year
+  grep -HA1 "Overall Reviews:" -- * | grep "game_review_summary" | grep -v "Need more user reviews" | sed 's/\..*\">/~/' | cut -d\< -f1 > /var/tmp/Steamy_Cats/Reviews
 
-cd /var/tmp/Steamy_Cats/fragments/ || (echo "Our fragment location is missing" ; exit 1)
-for i in *
-do
-  if [ "$SEQUENTIAL" == "true" ]
-  then
-    makecats "$i" || (echo "Writing Tag and Flags for $i failed" ; exit 1)
-  else
-    makecats "$i" || (echo "Writing Tag and Flags for $i failed" ; exit 1) &
-  fi
-done
-wait
+  cd /var/tmp/Steamy_Cats/fragments/ || (echo "Our fragment location is missing" ; exit 1)
+  for i in *
+  do
+    if [ "$SEQUENTIAL" == "true" ]
+    then
+      makecats "$i" || (echo "Writing Tag and Flags for $i failed" ; exit 1)
+    else
+      makecats "$i" || (echo "Writing Tag and Flags for $i failed" ; exit 1) &
+    fi
+  done
+  wait
 }
 
 #######################################################################################
@@ -622,24 +644,34 @@ function helpoutput()
   --debug : Turn on lots of things to exit on error and show commands being ran
   You should also consider --sequential with --debug for more meaningful output
   --sequential : Runs commands one at a time instead of in parallel
+    Shell Variable: SEQUENTIAL
   --profiler : Prepends timestamp and shows all commands ran
   Intended to be redirected to file for profiling of code
   --ignore-old-categories : Gets rid of all category configuration while retaining favorites
+    Shell Variable: WIPE_CONFIG
   --clear-whole-config : Preserves nothing from old configuration
+    Shell Variable: FRESH_CONFIG
   --clean-dls : Gets rid of failed downloads and tries again
+    Shell Variable: CLEAN_DLS
   --category-list : Returns the list of categories available
   --vdf-file : Name of a VDF configuration to use instead of the script discovered one
   Usage: --vdf-file=/path/to/file.vdf
+    Shell Variable: VDFOVERRIDE
   --steam-user-id : The numeric USER ID for your Steam account
   Usage: --steam-user-id=77777777777777777
+    Shell Variable: WEBACCNUM
   --comm-html : Download your own community page instead of making it public
   Usage: --comm-html=/path/to/steamcommunity.html
+    Shell Variable: COMM_DOWNLOAD
   --user : User number to execute the script with, instead of inputting after running
   Usage: --user=\$USERNUM
+    Shell Variable: USERNUM
   --include-file : Location of the file containing a list of categories to include
   Usage: --include-file=\$FILENAME
+    Shell Variable: INCLUDE_FILE
   --exclude-file : Location of the file containing a list of categories to exclude
-  Usage: --exclude-file=\$FILENAME"
+  Usage: --exclude-file=\$FILENAME
+    Shell Variable: EXCLUDE_FILE"
 }
 
 #######################################################################################
@@ -721,17 +753,6 @@ CLI_ARGS=("$@")
 # Since we go pretty ham with parallel operations
 renice 19 $$ > /dev/null
 
-# Setting some defaults
-WIPE_CONFIG="false"
-CLEAN_DLS="false"
-FRESH_CONFIG="false"
-SEQUENTIAL="false"
-USERNUM="false"
-VDFOVERRIDE="false"
-WEBACCNUM="false"
-COMM_DOWNLOAD="false"
-INCLUDE_FILE="$HOME/.config/Steamy_Cats/include.conf"
-EXCLUDE_FILE="$HOME/.config/Steamy_Cats/exclude.conf"
 for cliarg in "${CLI_ARGS[@]}"
 do
   case "$cliarg" in
