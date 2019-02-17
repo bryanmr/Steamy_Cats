@@ -272,7 +272,7 @@ download_store() {
 #######################################################################################
 
 make_categories() {
-  local VALNUM TAGS REVIEW RELYEAR HIDDENLINE i line
+  local VALNUM TAGS REVIEW HIDDENLINE i line whichgame relyear
   makeflags() {
     if ! grep "game_area_details_specs" "$HOME/.local/share/steam_store_frontend/$1.html" | grep -q 'class="name"'
     then
@@ -321,15 +321,6 @@ make_categories() {
     fi
   }
 
-  makerelease() {
-    if ! grep -q "^$1\." /var/tmp/Steamy_Cats/Release_Year
-    then
-      printf "\t\t\t\t\t\t\t\"%s\"\t\t\"%s\"\n" "340" "RELEASE UNKNOWN" >> /var/tmp/Steamy_Cats/fragments/"$1"
-    else
-      RELYEAR="$(grep "^$1\." /var/tmp/Steamy_Cats/Release_Year | cut -d. -f2)"
-      printf "\t\t\t\t\t\t\t\"%s\"\t\t\"%s\"\n" "340" "RELEASE $RELYEAR" >> /var/tmp/Steamy_Cats/fragments/"$1"
-    fi
-  }
 
   makereviews() {
     if ! grep -q "^$1~" /var/tmp/Steamy_Cats/Reviews
@@ -348,7 +339,6 @@ make_categories() {
       maketags "$1"
       makeflags "$1"
       tagnative "$1"
-      makerelease "$1"
       makereviews "$1"
     else
       echo "~FAILED~" > "$HOME/.local/share/steam_store_frontend/$1.html"
@@ -391,8 +381,13 @@ make_categories() {
     grep '<span class="platform_img linux">' | cut -d. -f1 >> /var/tmp/Steamy_Cats/Linux2
   curl -s -o "$HOME"/.local/share/SteamLinux.json https://raw.githubusercontent.com/SteamDatabase/SteamLinux/master/GAMES.json
 
-  # Release date and reviews
-  grep -H "<b>Release Date:" -- * | sed -nr 's/([0-9]*\.).*([0-9]{4}).*/\1\2/p' > /var/tmp/Steamy_Cats/Release_Year
+  # Release date
+  while IFS="." read -r whichgame relyear
+  do
+    printf "\t\t\t\t\t\t\t\"%s\"\t\t\"%s\"\n" "340" "RELEASE $relyear" >> /var/tmp/Steamy_Cats/fragments/"$whichgame"
+  done <<< "$(grep -H "<b>Release Date:" -- * | sed -nr 's/([0-9]*\.).*([0-9]{4}).*/\1\2/p')"
+
+  # Reviews
   grep -HA1 "Overall Reviews:" -- * | grep "game_review_summary" | grep -v "Need more user reviews" | sed 's/\..*\">/~/' | cut -d\< -f1 > /var/tmp/Steamy_Cats/Reviews
 
   cd /var/tmp/Steamy_Cats/fragments/ || (echo "Our fragment location is missing" ; exit 1)
