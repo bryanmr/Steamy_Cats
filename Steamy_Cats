@@ -183,7 +183,6 @@ download_store() {
   DL_COUNT SLEEP_NOW i
 
   cleandls() {
-    # Deleting failed downloads to try again
     cd "$DLOC" || (echo "Download location does not exist." ; exit 1)
     if grep -q '>Error<' -- *
     then
@@ -272,7 +271,7 @@ download_store() {
 #######################################################################################
 
 make_categories() {
-  local VALNUM TAGS REVIEW HIDDENLINE i line whichgame relyear
+  local VALNUM TAGS HIDDENLINE i line which_game rel_year rev_score
   makeflags() {
     if ! grep "game_area_details_specs" "$HOME/.local/share/steam_store_frontend/$1.html" | grep -q 'class="name"'
     then
@@ -321,17 +320,6 @@ make_categories() {
     fi
   }
 
-
-  makereviews() {
-    if ! grep -q "^$1~" /var/tmp/Steamy_Cats/Reviews
-    then
-      return
-    else
-      REVIEW="$(grep "^$1~" /var/tmp/Steamy_Cats/Reviews | cut -d~ -f2)"
-      printf "\t\t\t\t\t\t\t\"%s\"\t\t\"%s\"\n" "350" "REVIEW $REVIEW" >> /var/tmp/Steamy_Cats/fragments/"$1"
-    fi
-  }
-
   makecats() {
     if [ -f "$HOME/.local/share/steam_store_frontend/$1.html" ] \
       || ! grep -q '~FAILED~' "$HOME/.local/share/steam_store_frontend/$1.html"
@@ -339,7 +327,6 @@ make_categories() {
       maketags "$1"
       makeflags "$1"
       tagnative "$1"
-      makereviews "$1"
     else
       echo "~FAILED~" > "$HOME/.local/share/steam_store_frontend/$1.html"
       printf "\t\t\t\t\t\t\t\"%s\"\t\t\"%s\"\n" "200" "STORE MISSING" >> /var/tmp/Steamy_Cats/fragments/"$1"
@@ -382,13 +369,16 @@ make_categories() {
   curl -s -o "$HOME"/.local/share/SteamLinux.json https://raw.githubusercontent.com/SteamDatabase/SteamLinux/master/GAMES.json
 
   # Release date
-  while IFS="." read -r whichgame relyear
+  while IFS="." read -r which_game rel_year
   do
-    printf "\t\t\t\t\t\t\t\"%s\"\t\t\"%s\"\n" "340" "RELEASE $relyear" >> /var/tmp/Steamy_Cats/fragments/"$whichgame"
+    printf "\t\t\t\t\t\t\t\"%s\"\t\t\"%s\"\n" "340" "RELEASE $rel_year" >> /var/tmp/Steamy_Cats/fragments/"$which_game"
   done <<< "$(grep -H "<b>Release Date:" -- * | sed -nr 's/([0-9]*\.).*([0-9]{4}).*/\1\2/p')"
 
   # Reviews
-  grep -HA1 "Overall Reviews:" -- * | grep "game_review_summary" | grep -v "Need more user reviews" | sed 's/\..*\">/~/' | cut -d\< -f1 > /var/tmp/Steamy_Cats/Reviews
+  while IFS="~" read -r which_game rev_score
+  do
+    printf "\t\t\t\t\t\t\t\"%s\"\t\t\"%s\"\n" "340" "REVIEW $rev_score" >> /var/tmp/Steamy_Cats/fragments/"$which_game"
+  done <<< "$(grep -HA1 "Overall Reviews:" -- * | grep "game_review_summary" | grep -v "Need more user reviews" | sed 's/\..*\">/~/' | cut -d\< -f1)"
 
   cd /var/tmp/Steamy_Cats/fragments/ || (echo "Our fragment location is missing" ; exit 1)
   for i in *
@@ -447,9 +437,10 @@ download_proton_db() {
 }
 
 write_proton_db_scores() {
-  # Mode
   local PDBNUM=0 TOTAL=0 NUMVALS=0 \
     MULT1 MULT2 RAWMEAN ROUNDMEAN line
+  
+  # Mode
   if ! grep -q "^$1," /var/tmp/Steamy_Cats/PDB.json
   then
     printf "\t\t\t\t\t\t\t\"%s\"\t\t\"PDB UNRATED\"\n" "301" >> /var/tmp/Steamy_Cats/fragments/"$1"
