@@ -19,6 +19,10 @@ EXCLUDE_FILE="$HOME/.config/Steamy_Cats/exclude.conf"
 #######################################################################################
 
 set -uEeo pipefail
+
+# Since we go pretty ham with parallel operations
+renice 19 $$ > /dev/null
+
 if ! type jq > /dev/null; then
   echo Script requires jq to be installed; exit 1; fi
 if ! type git > /dev/null; then
@@ -33,18 +37,16 @@ trap '(echo "Exit Code: $? ~~ Last Command: $previous_command" ; exit 1)' ERR
 rm -rf /var/tmp/Steamy_Cats/
 mkdir -p /var/tmp/Steamy_Cats/fragments/ /var/tmp/Steamy_Cats/rewrites/
 
-# See bottom of script for default behavior
+# See bottom of script for main function
 
 #######################################################################################
 #### Parse Steam config and make game files                                        ####
 #######################################################################################
 
-function parse_config()
-{
+function parse_config {
   local GAMES="" GAMESLIST="" APPS_SECTION game appid
 
-  function community_profile
-  { # Run this first, it will overwrite the copy_config output
+  function community_profile {
     if [ "$COMM_DOWNLOAD" == "false" ]
     then
       echo "Downloading your community profile, if public, and then getting full list of games you own"
@@ -77,11 +79,9 @@ function parse_config()
     fi
   }
 
-  function copy_config
-  {
+  function copy_config {
     local BEGIN_APPS END_APPS SECCOUNT COUNT_LINES i
-    function write_copy
-    { # We call this once per game to write the section we will use
+    function write_copy {
       local OURSECTION
       OURSECTION=$(grep -A100 $'^\t\t\t\t\t\"'"$1"\" <<< "$APPS_SECTION" | awk 'NR==1,/^\t\t\t\t\t}$/' | head -n -2)
 
@@ -175,15 +175,13 @@ function parse_config()
 #### Download Game Details from Steam Store                                        ####
 #######################################################################################
 
-function download_store()
-{
+function download_store {
   local DLOC="$HOME/.local/share/steam_store_frontend/" \
   TLOC="https://store.steampowered.com/app/" \
   NUMEXISTS=0 DOWNLOADING=0 DL_LIST="" GREPCOUNT DOWNLOADED=0 \
   DL_COUNT SLEEP_NOW i
 
-  function cleandls
-  {
+  function cleandls {
     # Deleting failed downloads to try again
     cd "$DLOC" || (echo "Download location does not exist." ; exit 1)
     if grep -q '>Error<' -- *
@@ -272,11 +270,9 @@ function download_store()
 #### Make Categories                                                               ####
 #######################################################################################
 
-function make_categories()
-{
+function make_categories {
   local VALNUM TAGS REVIEW RELYEAR HIDDENLINE i line
-  function makeflags
-  {
+  function makeflags {
     if ! grep "game_area_details_specs" "$HOME/.local/share/steam_store_frontend/$1.html" | grep -q 'class="name"'
     then
       printf "\t\t\t\t\t\t\t\"%s\"\t\t\"%s\"\n" "100" "SFLAGS NONE" >> /var/tmp/Steamy_Cats/fragments/"$1"
@@ -291,8 +287,7 @@ function make_categories()
     done <<< "$(grep game_area_details_specs "$HOME/.local/share/steam_store_frontend/$1.html" | grep -o 'class="name"[^\>]*\>[^\<]*' | cut -d\> -f2)"
   }
 
-  function maketags
-  {
+  function maketags {
     if grep -q "You must login to see this content." "$HOME/.local/share/steam_store_frontend/$1.html"
     then
       printf "\t\t\t\t\t\t\t\"%s\"\t\t\"%s\"\n" "320" "SFLAGS ADULT" >> /var/tmp/Steamy_Cats/fragments/"$1"
@@ -314,8 +309,7 @@ function make_categories()
     done <<< "$TAGS"
   }
 
-  function tagnative
-  {
+  function tagnative {
     # Write if we are Linux native
     # Else check Proton DB ratings
     if grep -q -e "^$1$" -e "\"$1\"" /var/tmp/Steamy_Cats/Linux /var/tmp/Steamy_Cats/Linux2 "$HOME"/.local/share/SteamLinux.json
@@ -326,8 +320,7 @@ function make_categories()
     fi
   }
 
-  function makerelease
-  {
+  function makerelease {
     if ! grep -q "^$1\." /var/tmp/Steamy_Cats/Release_Year
     then
       printf "\t\t\t\t\t\t\t\"%s\"\t\t\"%s\"\n" "340" "RELEASE UNKNOWN" >> /var/tmp/Steamy_Cats/fragments/"$1"
@@ -337,8 +330,7 @@ function make_categories()
     fi
   }
 
-  function makereviews
-  {
+  function makereviews {
     if ! grep -q "^$1~" /var/tmp/Steamy_Cats/Reviews
     then
       return
@@ -348,8 +340,7 @@ function make_categories()
     fi
   }
 
-  function makecats
-  {
+  function makecats {
     if [ -f "$HOME/.local/share/steam_store_frontend/$1.html" ] \
       || ! grep -q '~FAILED~' "$HOME/.local/share/steam_store_frontend/$1.html"
     then
@@ -420,12 +411,10 @@ function make_categories()
 #### ProtonDB Ratings                                                              ####
 #######################################################################################
 
-function download_proton_db()
-{
+function download_proton_db {
   local YEAR MONTH PDBLOC="$HOME/.local/share/protondb-data/" \
     TAR_FILENAME
-  function check_pdb
-  {
+  function check_pdb {
     if [ ! -d "$PDBLOC" ]
     then
       cd "$HOME"/.local/share/ || (echo ".local/share does not exist, exiting" ; exit 1)
@@ -459,8 +448,7 @@ function download_proton_db()
   jq -r '.[] | [.appId, .rating] | join(",")' "$PDBLOC"/reports/reports_piiremoved.json > /var/tmp/Steamy_Cats/PDB.json
 }
 
-function write_proton_db_scores()
-{
+function write_proton_db_scores {
   # Mode
   local PDBNUM=0 TOTAL=0 NUMVALS=0 \
     MULT1 MULT2 RAWMEAN ROUNDMEAN line
@@ -533,8 +521,7 @@ function write_proton_db_scores()
 #### Category List                                                                 ####
 #######################################################################################
 
-function category_list()
-{
+function category_list {
   mkdir -p ~/.config/Steamy_Cats/
   echo "# List of all categories that games are assigned"
   echo "# To skip over unwanted categories, save category names to ~/.config/Steamy_Cats/exclude.conf"
@@ -547,8 +534,7 @@ function category_list()
 #### Check if the config is valid                                                  ####
 #######################################################################################
 
-function check_valid
-{
+function check_valid {
   local BRACKETS PDB_PLAT NATIVECOUNT
   BRACKETS="$(tr -cd '{}' < "$1")"
   while [[ "$BRACKETS" = *'{}'* ]]
@@ -572,7 +558,7 @@ function check_valid
       echo "Any missing games should be added to a group, such as ALL, and then the script rerun"
       echo "Old config backed up to /var/tmp/oldconfig.vdf"
       echo "New config written. To apply, run the below command:"
-      echo "cp /var/tmp/newconfig.vdf $OUR_CONFIG"
+      echo "cp /var/tmp/newconfig.vdf $2"
     fi
   fi
 }
@@ -581,8 +567,7 @@ function check_valid
 #### Assemble Final Configurations                                                 ####
 #######################################################################################
 
-function assemble_steam_config()
-{
+function assemble_steam_config {
   local BEGIN_APPS END_APPS SECCOUNT i
   echo "Creating final configuration"
 
@@ -637,8 +622,7 @@ function assemble_steam_config()
 #### Help Output                                                                   ####
 #######################################################################################
 
-function helpoutput()
-{
+function helpoutput {
   echo "Steamy Cats is a script to categorize and organize Steam games
   Options include:
   --debug : Turn on lots of things to exit on error and show commands being ran
@@ -678,10 +662,8 @@ function helpoutput()
 #### Find our config                                                               ####
 #######################################################################################
 
-function find_config
-{
-  function which_user
-  { # Function to learn which user we are using
+function find_config {
+  function which_user {
     local NAMES NUMNAMES line num
     NAMES="$(grep PersonaName ~/.steam/steam/userdata/*/config/localconfig.vdf | cut -d\" -f4)"
     NUMNAMES="$(wc -l <<< "$NAMES")"
@@ -748,127 +730,132 @@ function find_config
 #### Variables, CLI switches, and renice                                           ####
 #######################################################################################
 
-CLI_ARGS=("$@")
+function parse_args {
+  local CLI_ARGS=("$@") cliarg
 
-# Since we go pretty ham with parallel operations
-renice 19 $$ > /dev/null
-
-for cliarg in "${CLI_ARGS[@]}"
-do
-  case "$cliarg" in
-    "--debug")
-      set -x
-      trap 'echo "Script Exited, files not cleaned up"' EXIT
-      ;;
-    "--sequential")
-      SEQUENTIAL="true"
-      ;;
-    "--profiler")
-      set -x
-      PS4='+ $(date "+%s.%N ($LINENO) ")'
-      ;;
-    "--ignore-old-categories")
-      WIPE_CONFIG="true"
-      ;;
-    "--clear-whole-config")
-      FRESH_CONFIG="true"
-      ;;
-    "--clean-dls")
-      CLEAN_DLS="true"
-      ;;
-    "--category-list")
-      category_list
-      exit
-      ;;
-    "--vdf-file"*)
-      VDFOVERRIDE="$( cut -d= -f2 <<< "$cliarg")"
-      echo "Using the VDF Config file $VDFOVERRIDE"
-      ;;
-    "--steam-user-id"*)
-      WEBACCNUM="$(cut -d= -f2 <<< "$cliarg")"
-      echo "Using the Steam User ID $WEBACCNUM"
-      ;;
-    "--comm-html"*)
-      COMM_DOWNLOAD="$(cut -d= -f2 <<< "$cliarg")"
-      COMM_DOWNLOAD="${COMM_DOWNLOAD/#\~/$HOME}"
-      echo "Using the Steam Community HTML at $COMM_DOWNLOAD"
-      ;;
-    "--include-file"*)
-      INCLUDE_FILE="$(cut -d= -f2 <<< "$cliarg")"
-      INCLUDE_FILE="${INCLUDE_FILE/#\~/$HOME}"
-      echo "Only including categories found in $INCLUDE_FILE"
-      ;;
-    "--exclude-file"*)
-      EXCLUDE_FILE="$(cut -d= -f2 <<< "$cliarg")"
-      EXCLUDE_FILE="${EXCLUDE_FILE/#\~/$HOME}"
-      echo "Removing categories found in $EXCLUDE_FILE"
-      ;;
-    "--user"*)
-      USERNUM="$(cut -d= -f2 <<< "$cliarg")"
-      echo "Command line passed user number: $USERNUM"
-      ;;
-    "--help")
-      helpoutput
-      exit
-      ;;
-    *)
-      echo "Unknown option: $cliarg"
-      helpoutput
-      exit
-      ;;
-  esac
-done
+  for cliarg in "${CLI_ARGS[@]}"
+  do
+    case "$cliarg" in
+      "--debug")
+        set -x
+        trap 'echo "Script Exited, files not cleaned up"' EXIT
+        ;;
+      "--sequential")
+        SEQUENTIAL="true"
+        ;;
+      "--profiler")
+        set -x
+        PS4='+ $(date "+%s.%N ($LINENO) ")'
+        ;;
+      "--ignore-old-categories")
+        WIPE_CONFIG="true"
+        ;;
+      "--clear-whole-config")
+        FRESH_CONFIG="true"
+        ;;
+      "--clean-dls")
+        CLEAN_DLS="true"
+        ;;
+      "--category-list")
+        category_list
+        exit
+        ;;
+      "--vdf-file"*)
+        VDFOVERRIDE="$( cut -d= -f2 <<< "$cliarg")"
+        echo "Using the VDF Config file $VDFOVERRIDE"
+        ;;
+      "--steam-user-id"*)
+        WEBACCNUM="$(cut -d= -f2 <<< "$cliarg")"
+        echo "Using the Steam User ID $WEBACCNUM"
+        ;;
+      "--comm-html"*)
+        COMM_DOWNLOAD="$(cut -d= -f2 <<< "$cliarg")"
+        COMM_DOWNLOAD="${COMM_DOWNLOAD/#\~/$HOME}"
+        echo "Using the Steam Community HTML at $COMM_DOWNLOAD"
+        ;;
+      "--include-file"*)
+        INCLUDE_FILE="$(cut -d= -f2 <<< "$cliarg")"
+        INCLUDE_FILE="${INCLUDE_FILE/#\~/$HOME}"
+        echo "Only including categories found in $INCLUDE_FILE"
+        ;;
+      "--exclude-file"*)
+        EXCLUDE_FILE="$(cut -d= -f2 <<< "$cliarg")"
+        EXCLUDE_FILE="${EXCLUDE_FILE/#\~/$HOME}"
+        echo "Removing categories found in $EXCLUDE_FILE"
+        ;;
+      "--user"*)
+        USERNUM="$(cut -d= -f2 <<< "$cliarg")"
+        echo "Command line passed user number: $USERNUM"
+        ;;
+      "--help")
+        helpoutput
+        exit
+        ;;
+      *)
+        echo "Unknown option: $cliarg"
+        helpoutput
+        exit
+        ;;
+    esac
+  done
+}
 
 #######################################################################################
 #### Main Logic                                                                    ####
 #######################################################################################
 
-OUR_CONFIG="Not Found"
+function main {
+  parse_args "$@"
 
-# Identify what VDF config file we are going to use
-find_config
+  local OUR_CONFIG="Not Found"
 
-echo "Our config file is: $OUR_CONFIG"
+  # Identify what VDF config file we are going to use
+  find_config
 
-if [ ! -e "$OUR_CONFIG" ]
-then
-  echo "We can't find the config file: $OUR_CONFIG"
-  echo "This is important, so we are quitting."
-  exit 1
-fi
+  echo "Our config file is: $OUR_CONFIG"
 
-if ! check_valid "$OUR_CONFIG"
-then
-  tput bold
-  echo "The configuration at $OUR_CONFIG fails validation"
-  tput sgr0
-fi
+  if [ ! -e "$OUR_CONFIG" ]
+  then
+    echo "We can't find the config file: $OUR_CONFIG"
+    echo "This is important, so we are quitting."
+    exit 1
+  fi
 
-cp "$OUR_CONFIG" /var/tmp/oldconfig.vdf || (echo "Copying config failed, not doing anything more" ; exit 1)
+  if ! check_valid "$OUR_CONFIG"
+  then
+    tput bold
+    echo "The configuration at $OUR_CONFIG fails validation"
+    tput sgr0
+  fi
 
-# This should only go on the first run, saving original untouched just in case
-if [ ! -f "$OUR_CONFIG"~ ]
-then
-  echo "This is our first time running, preserving original config"
-  cp "$OUR_CONFIG" "$OUR_CONFIG"~ || (echo "Preserve Original File Failed!" ; exit 1)
-fi
+  cp "$OUR_CONFIG" /var/tmp/oldconfig.vdf || (echo "Copying config failed, not doing anything more" ; exit 1)
 
-# Make config file sections for each game
-# We also parse the current config and write it to those files
-parse_config "$OUR_CONFIG" || (echo "Could not create new config fragments" ; exit 1)
+  # This should only go on the first run, saving original untouched just in case
+  if [ ! -f "$OUR_CONFIG"~ ]
+  then
+    echo "This is our first time running, preserving original config"
+    cp "$OUR_CONFIG" "$OUR_CONFIG"~ || (echo "Preserve Original File Failed!" ; exit 1)
+  fi
 
-# Download store pages for all the games
-download_store || (echo "Could not download Steam Store info" ; exit 1)
+  # Make config file sections for each game
+  # We also parse the current config and write it to those files
+  parse_config "$OUR_CONFIG" || (echo "Could not create new config fragments" ; exit 1)
 
-# We download the ProtonDB info from github
-download_proton_db || (echo "Could not download ProtonDB info" ; exit 1)
+  # Download store pages for all the games
+  download_store || (echo "Could not download Steam Store info" ; exit 1)
 
-# This is where we parse the store pages and ProtonDB info and write it to our game files
-make_categories || (echo "Failed to make new configs for games" ; exit 1)
+  # We download the ProtonDB info from github
+  download_proton_db || (echo "Could not download ProtonDB info" ; exit 1)
 
-# We take the original config and replace the "Apps" section with the one we just made
-# This function takes the start of the config, our game files, and the end and combines it
-assemble_steam_config "$OUR_CONFIG" || (echo "Failed to assemble our config" ; exit 1)
+  # This is where we parse the store pages and ProtonDB info and write it to our game files
+  make_categories || (echo "Failed to make new configs for games" ; exit 1)
 
-# Verify our config is valid
-check_valid "/var/tmp/newconfig.vdf" || (echo "Config has invalid syntax!" ; exit 1)
+  # We take the original config and replace the "Apps" section with the one we just made
+  # This function takes the start of the config, our game files, and the end and combines it
+  assemble_steam_config "$OUR_CONFIG" || (echo "Failed to assemble our config" ; exit 1)
+
+  # Verify our config is valid
+  check_valid "/var/tmp/newconfig.vdf" "$OUR_CONFIG" || (echo "Config has invalid syntax!" ; exit 1)
+}
+
+main "$@"
