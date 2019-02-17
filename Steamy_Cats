@@ -43,10 +43,10 @@ mkdir -p /var/tmp/Steamy_Cats/fragments/ /var/tmp/Steamy_Cats/rewrites/
 #### Parse Steam config and make game files                                        ####
 #######################################################################################
 
-function parse_config {
+parse_config() {
   local GAMES="" GAMESLIST="" APPS_SECTION game appid
 
-  function community_profile {
+  community_profile() {
     if [ "$COMM_DOWNLOAD" == "false" ]
     then
       echo "Downloading your community profile, if public, and then getting full list of games you own"
@@ -79,9 +79,10 @@ function parse_config {
     fi
   }
 
-  function copy_config {
+  copy_config() {
     local BEGIN_APPS END_APPS SECCOUNT COUNT_LINES i
-    function write_copy {
+
+    write_copy() {
       local OURSECTION
       OURSECTION=$(grep -A100 $'^\t\t\t\t\t\"'"$1"\" <<< "$APPS_SECTION" | awk 'NR==1,/^\t\t\t\t\t}$/' | head -n -2)
 
@@ -175,13 +176,13 @@ function parse_config {
 #### Download Game Details from Steam Store                                        ####
 #######################################################################################
 
-function download_store {
+download_store() {
   local DLOC="$HOME/.local/share/steam_store_frontend/" \
   TLOC="https://store.steampowered.com/app/" \
   NUMEXISTS=0 DOWNLOADING=0 DL_LIST="" GREPCOUNT DOWNLOADED=0 \
   DL_COUNT SLEEP_NOW i
 
-  function cleandls {
+  cleandls() {
     # Deleting failed downloads to try again
     cd "$DLOC" || (echo "Download location does not exist." ; exit 1)
     if grep -q '>Error<' -- *
@@ -270,9 +271,9 @@ function download_store {
 #### Make Categories                                                               ####
 #######################################################################################
 
-function make_categories {
+make_categories() {
   local VALNUM TAGS REVIEW RELYEAR HIDDENLINE i line
-  function makeflags {
+  makeflags() {
     if ! grep "game_area_details_specs" "$HOME/.local/share/steam_store_frontend/$1.html" | grep -q 'class="name"'
     then
       printf "\t\t\t\t\t\t\t\"%s\"\t\t\"%s\"\n" "100" "SFLAGS NONE" >> /var/tmp/Steamy_Cats/fragments/"$1"
@@ -287,7 +288,7 @@ function make_categories {
     done <<< "$(grep game_area_details_specs "$HOME/.local/share/steam_store_frontend/$1.html" | grep -o 'class="name"[^\>]*\>[^\<]*' | cut -d\> -f2)"
   }
 
-  function maketags {
+  maketags() {
     if grep -q "You must login to see this content." "$HOME/.local/share/steam_store_frontend/$1.html"
     then
       printf "\t\t\t\t\t\t\t\"%s\"\t\t\"%s\"\n" "320" "SFLAGS ADULT" >> /var/tmp/Steamy_Cats/fragments/"$1"
@@ -309,7 +310,7 @@ function make_categories {
     done <<< "$TAGS"
   }
 
-  function tagnative {
+  tagnative() {
     # Write if we are Linux native
     # Else check Proton DB ratings
     if grep -q -e "^$1$" -e "\"$1\"" /var/tmp/Steamy_Cats/Linux /var/tmp/Steamy_Cats/Linux2 "$HOME"/.local/share/SteamLinux.json
@@ -320,7 +321,7 @@ function make_categories {
     fi
   }
 
-  function makerelease {
+  makerelease() {
     if ! grep -q "^$1\." /var/tmp/Steamy_Cats/Release_Year
     then
       printf "\t\t\t\t\t\t\t\"%s\"\t\t\"%s\"\n" "340" "RELEASE UNKNOWN" >> /var/tmp/Steamy_Cats/fragments/"$1"
@@ -330,7 +331,7 @@ function make_categories {
     fi
   }
 
-  function makereviews {
+  makereviews() {
     if ! grep -q "^$1~" /var/tmp/Steamy_Cats/Reviews
     then
       return
@@ -340,7 +341,7 @@ function make_categories {
     fi
   }
 
-  function makecats {
+  makecats() {
     if [ -f "$HOME/.local/share/steam_store_frontend/$1.html" ] \
       || ! grep -q '~FAILED~' "$HOME/.local/share/steam_store_frontend/$1.html"
     then
@@ -379,12 +380,12 @@ function make_categories {
     printf "\t\t\t\t\t}\n" >> /var/tmp/Steamy_Cats/fragments/"$1"
   }
 
-  # Main entry logic just calls function above a bunch
   echo "Adding new category tags to the games!"
+
+  cd "$HOME"/.local/share/steam_store_frontend/ || (echo "Downloads location does not exist, can't parse" ; exit 1)
 
   # Get files ready to know if we are Linux native
   # We do three methods, since the labeling here sucks
-  cd "$HOME"/.local/share/steam_store_frontend/ || (echo "Downloads location does not exist, can't parse" ; exit 1)
   grep -Hl 'data-os="linux">' -- * | cut -d. -f1 > /var/tmp/Steamy_Cats/Linux
   grep -m1 -H '<div class="game_area_purchase_platform">' -- * |\
     grep '<span class="platform_img linux">' | cut -d. -f1 >> /var/tmp/Steamy_Cats/Linux2
@@ -411,10 +412,11 @@ function make_categories {
 #### ProtonDB Ratings                                                              ####
 #######################################################################################
 
-function download_proton_db {
+download_proton_db() {
   local YEAR MONTH PDBLOC="$HOME/.local/share/protondb-data/" \
     TAR_FILENAME
-  function check_pdb {
+
+  check_pdb() {
     if [ ! -d "$PDBLOC" ]
     then
       cd "$HOME"/.local/share/ || (echo ".local/share does not exist, exiting" ; exit 1)
@@ -422,6 +424,7 @@ function download_proton_db {
       git clone https://github.com/bdefore/protondb-data.git &> /dev/null || (echo "Cannot download ProtonDB, error" ; exit 1)
     fi
   }
+
   rm -f "$PDBLOC"/reports/reports_piiremoved.json
 
   check_pdb
@@ -448,7 +451,7 @@ function download_proton_db {
   jq -r '.[] | [.appId, .rating] | join(",")' "$PDBLOC"/reports/reports_piiremoved.json > /var/tmp/Steamy_Cats/PDB.json
 }
 
-function write_proton_db_scores {
+write_proton_db_scores() {
   # Mode
   local PDBNUM=0 TOTAL=0 NUMVALS=0 \
     MULT1 MULT2 RAWMEAN ROUNDMEAN line
@@ -521,7 +524,7 @@ function write_proton_db_scores {
 #### Category List                                                                 ####
 #######################################################################################
 
-function category_list {
+category_list() {
   mkdir -p ~/.config/Steamy_Cats/
   echo "# List of all categories that games are assigned"
   echo "# To skip over unwanted categories, save category names to ~/.config/Steamy_Cats/exclude.conf"
@@ -534,7 +537,7 @@ function category_list {
 #### Check if the config is valid                                                  ####
 #######################################################################################
 
-function check_valid {
+check_valid() {
   local BRACKETS PDB_PLAT NATIVECOUNT
   BRACKETS="$(tr -cd '{}' < "$1")"
   while [[ "$BRACKETS" = *'{}'* ]]
@@ -567,7 +570,7 @@ function check_valid {
 #### Assemble Final Configurations                                                 ####
 #######################################################################################
 
-function assemble_steam_config {
+assemble_steam_config() {
   local BEGIN_APPS END_APPS SECCOUNT i
   echo "Creating final configuration"
 
@@ -622,7 +625,7 @@ function assemble_steam_config {
 #### Help Output                                                                   ####
 #######################################################################################
 
-function helpoutput {
+helpoutput() {
   echo "Steamy Cats is a script to categorize and organize Steam games
   Options include:
   --debug : Turn on lots of things to exit on error and show commands being ran
@@ -662,8 +665,8 @@ function helpoutput {
 #### Find our config                                                               ####
 #######################################################################################
 
-function find_config {
-  function which_user {
+find_config() {
+  which_user() {
     local NAMES NUMNAMES line num
     NAMES="$(grep PersonaName ~/.steam/steam/userdata/*/config/localconfig.vdf | cut -d\" -f4)"
     NUMNAMES="$(wc -l <<< "$NAMES")"
@@ -727,10 +730,10 @@ function find_config {
 }
 
 #######################################################################################
-#### Variables, CLI switches, and renice                                           ####
+#### CLI switches                                                                  ####
 #######################################################################################
 
-function parse_args {
+parse_args() {
   local CLI_ARGS=("$@") cliarg
 
   for cliarg in "${CLI_ARGS[@]}"
@@ -804,7 +807,7 @@ function parse_args {
 #### Main Logic                                                                    ####
 #######################################################################################
 
-function main {
+main() {
   parse_args "$@"
 
   local OUR_CONFIG="Not Found"
