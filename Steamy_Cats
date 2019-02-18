@@ -1,4 +1,5 @@
 #!/bin/bash
+# shellcheck disable=SC2059
 # Steamy Cats is a script to organize your Steam library
 
 # You can set variables here, or pass command line arguments
@@ -169,7 +170,7 @@ parse_config() {
     copy_config "$@" || (echo "Failed to copy old configuration" ; exit 1)
   fi
 
-  echo "Created $(wc -w <<< "$GAMESLIST") files :: Preserved configuration for $(wc -w <<< "$GAMES") games."
+  echo "$(wc -w <<< "$GAMESLIST") games in profile :: Preserved configuration for $(wc -w <<< "$GAMES") games."
 }
 
 #######################################################################################
@@ -271,23 +272,7 @@ download_store() {
 #######################################################################################
 
 make_categories() {
-  local VALNUM HIDDENLINE i line which_game rel_year rev_score countnum values val
-
-  function makeflags
-  {
-    if ! grep "game_area_details_specs" "$HOME/.local/share/steam_store_frontend/$1.html" | grep -q 'class="name"'
-    then
-      printf "\t\t\t\t\t\t\t\"%s\"\t\t\"%s\"\n" "100" "SFLAGS NONE" >> /var/tmp/Steamy_Cats/fragments/"$1"
-      return
-    fi
-
-    VALNUM=100
-    while read -r line
-    do
-      printf "\t\t\t\t\t\t\t\"%s\"\t\t\"SFLAGS %s\"\n" "$VALNUM" "$line" >> /var/tmp/Steamy_Cats/fragments/"$1"
-      let VALNUM=$VALNUM+1
-    done <<< "$(grep game_area_details_specs "$HOME/.local/share/steam_store_frontend/$1.html" | grep -o 'class="name"[^\>]*\>[^\<]*' | cut -d\> -f2)"
-  }
+  local line="\t\t\t\t\t\t\t\"%s\"\t\t\"%s\"\n"
 
   write_proton_db_scores() {
     local pdb_mean pdb_mode
@@ -295,26 +280,25 @@ make_categories() {
     # Mode
     if ! grep -q "^$1," /var/tmp/Steamy_Cats/PDB.csv
     then
-      printf "\t\t\t\t\t\t\t\"%s\"\t\t\"PDB UNRATED\"\n" "301" >> /var/tmp/Steamy_Cats/fragments/"$1"
+      printf "$line" "301" "PDB UNRATED" >> /var/tmp/Steamy_Cats/fragments/"$1"
       return
     else
       pdb_mode="$(grep "^$1," /var/tmp/Steamy_Cats/PDB.csv | sort | uniq -c | sort -nr | head -n1 | cut -d, -f2)"
-      printf "\t\t\t\t\t\t\t\"%s\"\t\t\"PDB MODE %s\"\n" "301" "$pdb_mode" >> /var/tmp/Steamy_Cats/fragments/"$1"
+      printf "$line" "301" "PDB MODE $pdb_mode" >> /var/tmp/Steamy_Cats/fragments/"$1"
     fi
 
     # Mean
-    # I have a feeling this whole thing can be done in awk, so that is a todo
     pdb_mean="$(grep "^$1," /var/tmp/Steamy_Cats/PDB.csv |\
       sed -e 's/Platinum/4/' -e 's/Gold/3/' -e 's/Silver/2/' -e 's/Bronze/1/' -e 's/Borked/0/' |\
       awk -F "," '{n++;sum+=$2} END {print n? int((sum/n)+.5) :"Error"}' |\
       sed -e 's/4/Platinum/' -e 's/3/Gold/' -e 's/2/Silver/' -e 's/1/Bronze/' -e 's/0/Borked/'
-    )"
-    printf "\t\t\t\t\t\t\t\"302\"\t\t\"PDB MEAN %s\"\n" "$pdb_mean" >> /var/tmp/Steamy_Cats/fragments/"$1"
+    )" # I have a feeling this whole thing can be done in awk, so that is a todo
+    printf "$line" "302" "PDB MEAN $pdb_mean" >> /var/tmp/Steamy_Cats/fragments/"$1"
   }
 
   makecats() {
-      makeflags "$1"
-#      echo "~FAILED~" > "$HOME/.local/share/steam_store_frontend/$1.html"
+    local HIDDENLINE
+    #      echo "~FAILED~" > "$HOME/.local/share/steam_store_frontend/$1.html"
 
     # Write the all group and tags bracket
     if grep -q '"ALL"' /var/tmp/Steamy_Cats/fragments/"$1"
@@ -340,80 +324,115 @@ make_categories() {
     printf "\t\t\t\t\t}\n" >> /var/tmp/Steamy_Cats/fragments/"$1"
   }
 
-  echo "Adding new category tags to the games!"
+  linux_native() {
+    local which_game
+    grep -Hl 'data-os="linux">' -- * | cut -d. -f1 > /var/tmp/Steamy_Cats/Linux
+    grep -m1 -H '<div class="game_area_purchase_platform">' -- * |\
+      grep '<span class="platform_img linux">' | cut -d. -f1 >> /var/tmp/Steamy_Cats/Linux
+    curl -s https://raw.githubusercontent.com/SteamDatabase/SteamLinux/master/GAMES.json |\
+      cut -d\" -f2 "$HOME"/.local/share/SteamLinux.json | grep '[0-9]' >> /var/tmp/Steamy_Cats/Linux
 
-  # Linux Native List Preparation
-  # We check three ways, since the labeling here sucks
-  cd "$HOME"/.local/share/steam_store_frontend/ || (echo "Downloads location does not exist, can't parse" ; exit 1)
-  grep -Hl 'data-os="linux">' -- * | cut -d. -f1 > /var/tmp/Steamy_Cats/Linux
-  grep -m1 -H '<div class="game_area_purchase_platform">' -- * |\
-    grep '<span class="platform_img linux">' | cut -d. -f1 >> /var/tmp/Steamy_Cats/Linux
-  curl -s https://raw.githubusercontent.com/SteamDatabase/SteamLinux/master/GAMES.json |\
-    cut -d\" -f2 "$HOME"/.local/share/SteamLinux.json | grep '[0-9]' >> /var/tmp/Steamy_Cats/Linux
-
-  # Linux Native
-  while read -r which_game ; do
-    if [ -f /var/tmp/Steamy_Cats/fragments/"$which_game" ] ; then
-      printf "\t\t\t\t\t\t\t\"%s\"\t\t\"APP NATIVE LINUX\"\n" "301" >> /var/tmp/Steamy_Cats/fragments/"$which_game"
-    fi
-  done <<< "$(sort -u /var/tmp/Steamy_Cats/Linux)"
-
-  # Proton DB Scores
-  if [ "$SEQUENTIAL" == "true" ] ; then
     while read -r which_game ; do
-      write_proton_db_scores "$which_game" || (echo "ProtonDB score failed" ; exit 1)
-    done <<< "$(cd /var/tmp/Steamy_Cats/fragments/ && grep -L LINUX -- *)"
-  else
-    while read -r which_game ; do
-      write_proton_db_scores "$which_game" || (echo "ProtonDB score failed" ; exit 1) &
-    done <<< "$(cd /var/tmp/Steamy_Cats/fragments/ && grep -L LINUX -- *)"
-    wait
-  fi
+      if [ -f /var/tmp/Steamy_Cats/fragments/"$which_game" ] ; then
+        printf "$line" "301" "APP NATIVE LINUX" >> /var/tmp/Steamy_Cats/fragments/"$which_game"
+      fi
+    done <<< "$(sort -u /var/tmp/Steamy_Cats/Linux)"
+  }
 
-  # Release date
-  while IFS="." read -r which_game rel_year ; do
-    if [ -f /var/tmp/Steamy_Cats/fragments/"$which_game" ] ; then
-      printf "\t\t\t\t\t\t\t\"%s\"\t\t\"%s\"\n" "340" "RELEASE $rel_year" >> /var/tmp/Steamy_Cats/fragments/"$which_game"
-    fi
-  done <<< "$(grep -H "<b>Release Date:" -- * | sed -nr 's/([0-9]*\.).*([0-9]{4}).*/\1\2/p')"
-
-  # Reviews
-  while IFS="~" read -r which_game rev_score ; do
-    if [ -f /var/tmp/Steamy_Cats/fragments/"$which_game" ] ; then
-      printf "\t\t\t\t\t\t\t\"%s\"\t\t\"%s\"\n" "350" "REVIEW $rev_score" >> /var/tmp/Steamy_Cats/fragments/"$which_game"
-    fi
-  done <<< "$(grep -HA1 "Overall Reviews:" -- * | grep "game_review_summary" | grep -v "Need more user reviews" | sed 's/\..*\">/~/' | cut -d\< -f1)"
-
-  # Flag Adult
-  while read -r which_game ; do
-    if [ -f /var/tmp/Steamy_Cats/fragments/"$which_game" ] ; then
-      printf "\t\t\t\t\t\t\t\"%s\"\t\t\"%s\"\n" "320" "SFLAGS ADULT" >> /var/tmp/Steamy_Cats/fragments/"$which_game"
-    fi
-  done <<< "$(grep -l "You must login to see this content." -- *.html | cut -d. -f1)"
-
-  # User Tags
-  while IFS="," read -ra values ; do
-    if [ ! -f /var/tmp/Steamy_Cats/fragments/"${values[0]}" ] ; then
-      continue
+  pdb_if_not_linux() {
+    local which_game
+    if [ "$SEQUENTIAL" == "true" ] ; then
+      while read -r which_game ; do
+        write_proton_db_scores "$which_game" || (echo "ProtonDB score failed" ; exit 1)
+      done <<< "$(cd /var/tmp/Steamy_Cats/fragments/ && grep -L LINUX -- *)"
     else
-      countnum=200
-      for val in "${values[@]:1}"; do
-        printf "\t\t\t\t\t\t\t\"%s\"\t\t\"TAGS %s\"\n" "$countnum" "$val" >> /var/tmp/Steamy_Cats/fragments/"${values[0]}"
-        let countnum++
-      done
+      while read -r which_game ; do
+        write_proton_db_scores "$which_game" || (echo "ProtonDB score failed" ; exit 1) &
+      done <<< "$(cd /var/tmp/Steamy_Cats/fragments/ && grep -L LINUX -- *)"
+      wait
     fi
-  done <<< "$(grep "\[{\"tagid\":" -- * |\
-    sed -E -e 's/\],/]}/' -e 's/\.html://' -e 's/([0-9]+)/{"\1":/' |\
-    jq -cr 'keys[] as $keys | .[] | [$keys, .[].name] | join(",")')"
+  }
+
+  rel_date() {
+    local which_game rel_year
+    while IFS="." read -r which_game rel_year ; do
+      if [ -f /var/tmp/Steamy_Cats/fragments/"$which_game" ] ; then
+        printf "$line" "340" "RELEASE $rel_year" >> /var/tmp/Steamy_Cats/fragments/"$which_game"
+      fi
+    done <<< "$(grep -H "<b>Release Date:" -- * | sed -nr 's/([0-9]*\.).*([0-9]{4}).*/\1\2/p')"
+  }
+
+  reviews() {
+    local which_game rev_score
+    while IFS="~" read -r which_game rev_score ; do
+      if [ -f /var/tmp/Steamy_Cats/fragments/"$which_game" ] ; then
+        printf "$line" "350" "REVIEW $rev_score" >> /var/tmp/Steamy_Cats/fragments/"$which_game"
+      fi
+    done <<< "$(grep -HA1 "Overall Reviews:" -- * | grep "game_review_summary" | grep -v "Need more user reviews" | sed 's/\..*\">/~/' | cut -d\< -f1)"
+  }
+
+  flag_adult() {
+    local which_game
+    while read -r which_game ; do
+      if [ -f /var/tmp/Steamy_Cats/fragments/"$which_game" ] ; then
+        printf "$line" "320" "SFLAGS ADULT" >> /var/tmp/Steamy_Cats/fragments/"$which_game"
+      fi
+    done <<< "$(grep -l "You must login to see this content." -- *.html | cut -d. -f1)"
+  }
+
+  user_tags() {
+    local values countnum val
+    while IFS="," read -ra values ; do
+      if [ ! -f /var/tmp/Steamy_Cats/fragments/"${values[0]}" ] ; then
+        continue
+      else
+        countnum=200
+        for val in "${values[@]:1}"; do
+          printf "$line" "$countnum" "TAGS $val" >> /var/tmp/Steamy_Cats/fragments/"${values[0]}"
+          let countnum++
+        done
+      fi
+    done <<< "$(grep "\[{\"tagid\":" -- * |\
+      sed -E -e 's/\],/]}/' -e 's/\.html://' -e 's/([0-9]+)/{"\1":/' |\
+      jq -cr 'keys[] as $keys | .[] | [$keys, .[].name] | join(",")')"
+  }
+
+  store_flags() {
+    local values countnum val
+    while IFS="," read -ra values ; do
+      if [ ! -f /var/tmp/Steamy_Cats/fragments/"${values[0]}" ] ; then
+        continue
+      else
+        countnum=100
+        for val in "${values[@]:1}"; do
+          printf "$line" "$countnum" "SFLAGS $val" >> /var/tmp/Steamy_Cats/fragments/"${values[0]}"
+          let countnum++
+        done
+      fi
+    done <<< "$(grep -F 'game_area_details_specs"' -- * |\
+      grep -Eo -e '^[0-9]+' -e 'class="name"[^\>]*\>[^\<]*' |\
+      cut -d\> -f2 | tr '\n' ',' | sed -E 's/([0-9]+)/\n\1/g' |\
+      awk 'length' | sed 's/,$//')"
+  }
+
+  echo "Adding new category tags to the games!"
+  cd "$HOME"/.local/share/steam_store_frontend/ || (echo "Downloads location does not exist, can't parse" ; exit 1)
+  linux_native && pdb_if_not_linux
+  rel_date
+  reviews
+  flag_adult
+  user_tags
+  store_flags
 
   cd /var/tmp/Steamy_Cats/fragments/ || (echo "Our fragment location is missing" ; exit 1)
-  for i in *
+  local fragments
+  for fragments in *
   do
     if [ "$SEQUENTIAL" == "true" ]
     then
-      makecats "$i" || (echo "Writing Tag and Flags for $i failed" ; exit 1)
+      makecats "$fragments" || (echo "Writing Tag and Flags for $fragments failed" ; exit 1)
     else
-      makecats "$i" || (echo "Writing Tag and Flags for $i failed" ; exit 1) &
+      makecats "$fragments" || (echo "Writing Tag and Flags for $fragments failed" ; exit 1) &
     fi
   done
   wait
