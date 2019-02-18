@@ -271,22 +271,22 @@ download_store() {
 #######################################################################################
 
 make_categories() {
-  local VALNUM TAGS HIDDENLINE i line which_game rel_year rev_score countnum values val
+  local VALNUM HIDDENLINE i line which_game rel_year rev_score countnum values val
 
-  maketags() {
-    if ! grep -q "\[{\"tagid\":" "$HOME/.local/share/steam_store_frontend/$1.html"
+  function makeflags
+  {
+    if ! grep "game_area_details_specs" "$HOME/.local/share/steam_store_frontend/$1.html" | grep -q 'class="name"'
     then
-      printf "\t\t\t\t\t\t\t\"%s\"\t\t\"%s\"\n" "200" "TAGS NONE" >> /var/tmp/Steamy_Cats/fragments/"$1"
+      printf "\t\t\t\t\t\t\t\"%s\"\t\t\"%s\"\n" "100" "SFLAGS NONE" >> /var/tmp/Steamy_Cats/fragments/"$1"
       return
     fi
 
-    TAGS="$(grep "\[{\"tagid\":" "$HOME/.local/share/steam_store_frontend/$1.html" | sed 's/\],/]/' | jq -r '.[].name' 2> /dev/null)"
-    VALNUM=200
+    VALNUM=100
     while read -r line
     do
-      printf "\t\t\t\t\t\t\t\"%s\"\t\t\"TAGS %s\"\n" "$VALNUM" "$line" >> /var/tmp/Steamy_Cats/fragments/"$1"
+      printf "\t\t\t\t\t\t\t\"%s\"\t\t\"SFLAGS %s\"\n" "$VALNUM" "$line" >> /var/tmp/Steamy_Cats/fragments/"$1"
       let VALNUM=$VALNUM+1
-    done <<< "$TAGS"
+    done <<< "$(grep game_area_details_specs "$HOME/.local/share/steam_store_frontend/$1.html" | grep -o 'class="name"[^\>]*\>[^\<]*' | cut -d\> -f2)"
   }
 
   write_proton_db_scores() {
@@ -313,7 +313,7 @@ make_categories() {
   }
 
   makecats() {
-      maketags "$1"
+      makeflags "$1"
 #      echo "~FAILED~" > "$HOME/.local/share/steam_store_frontend/$1.html"
 
     # Write the all group and tags bracket
@@ -391,21 +391,20 @@ make_categories() {
     fi
   done <<< "$(grep -l "You must login to see this content." -- *.html | cut -d. -f1)"
 
-  # Store Flags
+  # User Tags
   while IFS="," read -ra values ; do
     if [ ! -f /var/tmp/Steamy_Cats/fragments/"${values[0]}" ] ; then
       continue
     else
-      countnum=100
+      countnum=200
       for val in "${values[@]:1}"; do
-        printf "\t\t\t\t\t\t\t\"%s\"\t\t\"SFLAGS %s\"\n" "$countnum" "$val" >> /var/tmp/Steamy_Cats/fragments/"${values[0]}"
+        printf "\t\t\t\t\t\t\t\"%s\"\t\t\"TAGS %s\"\n" "$countnum" "$val" >> /var/tmp/Steamy_Cats/fragments/"${values[0]}"
         let countnum++
       done
     fi
   done <<< "$(grep "\[{\"tagid\":" -- * |\
     sed -E -e 's/\],/]}/' -e 's/\.html://' -e 's/([0-9]+)/{"\1":/' |\
     jq -cr 'keys[] as $keys | .[] | [$keys, .[].name] | join(",")')"
-
 
   cd /var/tmp/Steamy_Cats/fragments/ || (echo "Our fragment location is missing" ; exit 1)
   for i in *
