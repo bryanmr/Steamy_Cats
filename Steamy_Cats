@@ -81,69 +81,46 @@ parse_config() {
   }
 
   copy_config() {
-    local apps_section games=""
-    write_copy() {
-      local OURSECTION
-      OURSECTION=$(grep -A100 $'^\t\t\t\t\t\"'"$1"\" <<< "$apps_section" | awk 'NR==1,/^\t\t\t\t\t}$/' | head -n -2)
-
-      if [ "$OURSECTION" == "" ]
-      then
-        echo Severe error, skipping "$1" since it would be empty, we are working on the below section:
-        grep -A100 $'\t\t\t\t\t\"'"$1" <<< "$apps_section" | awk 'NR==1,/^\t\t\t\t\t}$/'
-        exit 1
-      fi
-
-      echo "$OURSECTION" > /var/tmp/Steamy_Cats/fragments/"$1"
-
-      # Sometimes games don't have tags but other configs
-      # This adds the tags section at the end
-      if ! grep -q $'\t\t\t\t\t\"tags\"' <<< "$OURSECTION"
-      then
-        {
-          printf "\t\t\t\t\t\t\"%s\"\n" "tags"
-          printf "\t\t\t\t\t\t{\n"
-        } >> /var/tmp/Steamy_Cats/fragments/"$1"
-      fi
-    }
-
-    # Processing original configuration, wiping if set
-    if [ "$WIPE_CONFIG" == "true" ]
-    then
-      # Match "Apps, set f=1 then go to next record (do not print)
+    local apps_section games tags_missing check_tags
+    if [ "$WIPE_CONFIG" == "true" ] ; then
+      # Match "Apps", set f=1 then go to next record (do not print)
       # Check for f and then match "[0-9]+", set n=1, print, go next record
       # check for n and then match a certain number of tabs and }, n=0 and f=0
       # check for n, print if it is present
       # Requires pgrep with lookahead support to preserve favorites
-      apps_section=$(awk '/^\t\t\t\t"Apps"$/{f=1;next} f&&/^\t\t\t\t\t"[0-9]+"$/{n=1;print;next} n&&/^\t\t\t\t}$/{n=0;f=0} ; n' "$1" |\
+      apps_section=$(awk '/^\t\t\t\t"Apps"$/{f=1;next}
+      f&&/^\t\t\t\t\t"[0-9]+"$/{n=1;print;next}
+      n&&/^\t\t\t\t}$/{n=0;f=0} ; n' "$1" |\
         grep -Pv $'\t\t\t\t\t\t\t\"\d*\"\t\t\"(?!favorite)')
     else
       # We are removing categories we create here
-      apps_section=$(awk '/^\t\t\t\t"Apps"$/{f=1;next} f&&/^\t\t\t\t\t"[0-9]+"$/{n=1;print;next} n&&/^\t\t\t\t}$/{n=0;f=0} ; n' "$1" |\
+      apps_section=$(awk '/^\t\t\t\t\t}$/{next}
+      /^\t\t\t\t\t\t}$/{next}
+      /^\t\t\t\t"Apps"$/{f=1;next}
+      f&&/^\t\t\t\t\t"[0-9]+"$/{n=1;print;next}
+      n&&/^\t\t\t\t}$/{n=0;f=0} ; n' "$1" |\
         grep -v -e '"TAGS ' -e '"SFLAGS ' -e '"APP ' -e '"PDB ' -e '"RELEASE ' -e '"REVIEW ')
     fi
 
-    # List of game IDs
-    games=$(grep $'^\t\t\t\t\t\"[0-9]' <<< "$apps_section" | cut -d\" -f2)
+    awk '/^\t\t\t\t\t"[0-9]+"$/ {split($0,a,"\"");print > "/var/tmp/Steamy_Cats/fragments/"a[2];next}
+    {print >> "/var/tmp/Steamy_Cats/fragments/"a[2]}' <<< "$apps_section"
 
-    local game
-    for game in $games
-    do
-      if [ "$SEQUENTIAL" == "true" ]
-      then
-        write_copy "$game" || (echo "Writing config info for $game failed" ; exit 1)
-      else
-        write_copy "$game" || (echo "Writing config info for $game failed" ; exit 1) &
-      fi
-    done
-    wait
+    check_tags="$(cd /var/tmp/Steamy_Cats/fragments/ &&\
+      grep -L $'\t\t\t\t\t\"tags\"' -- *)"
+    if [ "$check_tags" != "" ] ; then
+    while read -r tags_missing ; do
+      printf "\t\t\t\t\t\t\"tags\"\n" >> /var/tmp/Steamy_Cats/fragments/"$tags_missing"
+      printf "\t\t\t\t\t\t{\n" >> /var/tmp/Steamy_Cats/fragments/"$tags_missing"
+    done <<< "$check_tags"
+  fi
+
+    games=$(grep $'^\t\t\t\t\t\"[0-9]' <<< "$apps_section" | cut -d\" -f2)
     echo "Preserved configuration for $(wc -w <<< "$games") games."
   }
 
   community_profile || (echo "Failed to write community profile" ; exit 1)
 
-  # This is where we copy the old configuration
-  if [ "$FRESH_CONFIG" == "true" ]
-  then
+  if [ "$FRESH_CONFIG" == "true" ] ; then
     echo ; return
   else
     copy_config "$@" || (echo "Failed to copy old configuration" ; exit 1)
