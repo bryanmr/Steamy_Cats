@@ -271,30 +271,9 @@ download_store() {
 #######################################################################################
 
 make_categories() {
-  local VALNUM TAGS HIDDENLINE i line which_game rel_year rev_score
-
-  makeflags() {
-    if ! grep "game_area_details_specs" "$HOME/.local/share/steam_store_frontend/$1.html" | grep -q 'class="name"'
-    then
-      printf "\t\t\t\t\t\t\t\"%s\"\t\t\"%s\"\n" "100" "SFLAGS NONE" >> /var/tmp/Steamy_Cats/fragments/"$1"
-      return
-    fi
-
-    VALNUM=100
-    while read -r line
-    do
-      printf "\t\t\t\t\t\t\t\"%s\"\t\t\"SFLAGS %s\"\n" "$VALNUM" "$line" >> /var/tmp/Steamy_Cats/fragments/"$1"
-      let VALNUM=$VALNUM+1
-    done <<< "$(grep game_area_details_specs "$HOME/.local/share/steam_store_frontend/$1.html" | grep -o 'class="name"[^\>]*\>[^\<]*' | cut -d\> -f2)"
-  }
+  local VALNUM TAGS HIDDENLINE i line which_game rel_year rev_score countnum values val
 
   maketags() {
-    if grep -q "You must login to see this content." "$HOME/.local/share/steam_store_frontend/$1.html"
-    then
-      printf "\t\t\t\t\t\t\t\"%s\"\t\t\"%s\"\n" "320" "SFLAGS ADULT" >> /var/tmp/Steamy_Cats/fragments/"$1"
-      return
-    fi
-
     if ! grep -q "\[{\"tagid\":" "$HOME/.local/share/steam_store_frontend/$1.html"
     then
       printf "\t\t\t\t\t\t\t\"%s\"\t\t\"%s\"\n" "200" "TAGS NONE" >> /var/tmp/Steamy_Cats/fragments/"$1"
@@ -310,17 +289,32 @@ make_categories() {
     done <<< "$TAGS"
   }
 
-  makecats() {
-    if [ -f "$HOME/.local/share/steam_store_frontend/$1.html" ] \
-      || ! grep -q '~FAILED~' "$HOME/.local/share/steam_store_frontend/$1.html"
+  write_proton_db_scores() {
+    local pdb_mean pdb_mode
+
+    # Mode
+    if ! grep -q "^$1," /var/tmp/Steamy_Cats/PDB.csv
     then
-      maketags "$1"
-      makeflags "$1"
+      printf "\t\t\t\t\t\t\t\"%s\"\t\t\"PDB UNRATED\"\n" "301" >> /var/tmp/Steamy_Cats/fragments/"$1"
+      return
     else
-      echo "~FAILED~" > "$HOME/.local/share/steam_store_frontend/$1.html"
-      printf "\t\t\t\t\t\t\t\"%s\"\t\t\"%s\"\n" "200" "STORE MISSING" >> /var/tmp/Steamy_Cats/fragments/"$1"
-      write_proton_db_scores "$1"
+      pdb_mode="$(grep "^$1," /var/tmp/Steamy_Cats/PDB.csv | sort | uniq -c | sort -nr | head -n1 | cut -d, -f2)"
+      printf "\t\t\t\t\t\t\t\"%s\"\t\t\"PDB MODE %s\"\n" "301" "$pdb_mode" >> /var/tmp/Steamy_Cats/fragments/"$1"
     fi
+
+    # Mean
+    # I have a feeling this whole thing can be done in awk, so that is a todo
+    pdb_mean="$(grep "^$1," /var/tmp/Steamy_Cats/PDB.csv |\
+      sed -e 's/Platinum/4/' -e 's/Gold/3/' -e 's/Silver/2/' -e 's/Bronze/1/' -e 's/Borked/0/' |\
+      awk -F "," '{n++;sum+=$2} END {print n? int((sum/n)+.5) :"Error"}' |\
+      sed -e 's/4/Platinum/' -e 's/3/Gold/' -e 's/2/Silver/' -e 's/1/Bronze/' -e 's/0/Borked/'
+    )"
+    printf "\t\t\t\t\t\t\t\"302\"\t\t\"PDB MEAN %s\"\n" "$pdb_mean" >> /var/tmp/Steamy_Cats/fragments/"$1"
+  }
+
+  makecats() {
+      maketags "$1"
+#      echo "~FAILED~" > "$HOME/.local/share/steam_store_frontend/$1.html"
 
     # Write the all group and tags bracket
     if grep -q '"ALL"' /var/tmp/Steamy_Cats/fragments/"$1"
@@ -332,7 +326,6 @@ make_categories() {
         printf "\t\t\t\t\t\t}\n"
       } >> /var/tmp/Steamy_Cats/fragments/"$1"
     fi
-
 
     # Fixing our handling of the Hidden field
     if grep -q $'\t\t\t\t\t"Hidden"\t\t"' /var/tmp/Steamy_Cats/fragments/"$1"
@@ -365,17 +358,17 @@ make_categories() {
     fi
   done <<< "$(sort -u /var/tmp/Steamy_Cats/Linux)"
 
-  my_exact_date
   # Proton DB Scores
-  while read -r which_game ; do
-    if [ "$SEQUENTIAL" == "true" ] ; then
+  if [ "$SEQUENTIAL" == "true" ] ; then
+    while read -r which_game ; do
       write_proton_db_scores "$which_game" || (echo "ProtonDB score failed" ; exit 1)
-    else
+    done <<< "$(cd /var/tmp/Steamy_Cats/fragments/ && grep -L LINUX -- *)"
+  else
+    while read -r which_game ; do
       write_proton_db_scores "$which_game" || (echo "ProtonDB score failed" ; exit 1) &
-    fi
-  done <<< "$(cd /var/tmp/Steamy_Cats/fragments/ && grep -L LINUX -- *)"
-  wait
-  my_exact_date
+    done <<< "$(cd /var/tmp/Steamy_Cats/fragments/ && grep -L LINUX -- *)"
+    wait
+  fi
 
   # Release date
   while IFS="." read -r which_game rel_year ; do
@@ -390,6 +383,29 @@ make_categories() {
       printf "\t\t\t\t\t\t\t\"%s\"\t\t\"%s\"\n" "350" "REVIEW $rev_score" >> /var/tmp/Steamy_Cats/fragments/"$which_game"
     fi
   done <<< "$(grep -HA1 "Overall Reviews:" -- * | grep "game_review_summary" | grep -v "Need more user reviews" | sed 's/\..*\">/~/' | cut -d\< -f1)"
+
+  # Flag Adult
+  while read -r which_game ; do
+    if [ -f /var/tmp/Steamy_Cats/fragments/"$which_game" ] ; then
+      printf "\t\t\t\t\t\t\t\"%s\"\t\t\"%s\"\n" "320" "SFLAGS ADULT" >> /var/tmp/Steamy_Cats/fragments/"$which_game"
+    fi
+  done <<< "$(grep -l "You must login to see this content." -- *.html | cut -d. -f1)"
+
+  # Store Flags
+  while IFS="," read -ra values ; do
+    if [ ! -f /var/tmp/Steamy_Cats/fragments/"${values[0]}" ] ; then
+      continue
+    else
+      countnum=100
+      for val in "${values[@]:1}"; do
+        printf "\t\t\t\t\t\t\t\"%s\"\t\t\"SFLAGS %s\"\n" "$countnum" "$val" >> /var/tmp/Steamy_Cats/fragments/"${values[0]}"
+        let countnum++
+      done
+    fi
+  done <<< "$(grep "\[{\"tagid\":" -- * |\
+    sed -E -e 's/\],/]}/' -e 's/\.html://' -e 's/([0-9]+)/{"\1":/' |\
+    jq -cr 'keys[] as $keys | .[] | [$keys, .[].name] | join(",")')"
+
 
   cd /var/tmp/Steamy_Cats/fragments/ || (echo "Our fragment location is missing" ; exit 1)
   for i in *
@@ -445,29 +461,6 @@ download_proton_db() {
   echo "Most recent ProtonDB file appears to be: $TAR_FILENAME"
   tar -zxvf "$TAR_FILENAME" > /dev/null || (echo "Untarring the ProtonDB failed somehow" ; exit 1)
   jq -r '.[] | [.appId, .rating] | join(",")' "$PDBLOC"/reports/reports_piiremoved.json > /var/tmp/Steamy_Cats/PDB.csv
-}
-
-write_proton_db_scores() {
-  local pdb_mean pdb_mode
-
-  # Mode
-  if ! grep -q "^$1," /var/tmp/Steamy_Cats/PDB.csv
-  then
-    printf "\t\t\t\t\t\t\t\"%s\"\t\t\"PDB UNRATED\"\n" "301" >> /var/tmp/Steamy_Cats/fragments/"$1"
-    return
-  else
-    pdb_mode="$(grep "^$1," /var/tmp/Steamy_Cats/PDB.csv | sort | uniq -c | sort -nr | head -n1 | cut -d, -f2)"
-    printf "\t\t\t\t\t\t\t\"%s\"\t\t\"PDB MODE %s\"\n" "301" "$pdb_mode" >> /var/tmp/Steamy_Cats/fragments/"$1"
-  fi
-
-  # Mean
-  # I have a feeling this whole thing can be done in awk, so that is a todo
-  pdb_mean="$(grep "^$1," /var/tmp/Steamy_Cats/PDB.csv |\
-    sed -e 's/Platinum/4/' -e 's/Gold/3/' -e 's/Silver/2/' -e 's/Bronze/1/' -e 's/Borked/0/' |\
-    awk -F "," '{n++;sum+=$2} END {print n? int((sum/n)+.5) :"Error"}' |\
-    sed -e 's/4/Platinum/' -e 's/3/Gold/' -e 's/2/Silver/' -e 's/1/Bronze/' -e 's/0/Borked/'
-  )"
-  printf "\t\t\t\t\t\t\t\"302\"\t\t\"PDB MEAN %s\"\n" "$pdb_mean" >> /var/tmp/Steamy_Cats/fragments/"$1"
 }
 
 #######################################################################################
