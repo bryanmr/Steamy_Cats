@@ -45,22 +45,21 @@ mkdir -p /var/tmp/Steamy_Cats/fragments/ /var/tmp/Steamy_Cats/rewrites/
 #######################################################################################
 
 parse_config() {
-  local GAMES="" GAMESLIST="" APPS_SECTION game appid
-
   community_profile() {
+    local appid games_list
     if [ "$COMM_DOWNLOAD" == "false" ]
     then
       echo "Downloading your community profile, if public, and then getting full list of games you own"
-      curl -s -L -o /var/tmp/Steamy_Cats/Community_Profile "https://steamcommunity.com/profiles/$WEBACCNUM/games/?tab=all" || \
-        (echo "Failed to download community profile" ; exit 1)
+      if ! curl -sLo /var/tmp/Steamy_Cats/Community_Profile "https://steamcommunity.com/profiles/$WEBACCNUM/games/?tab=all" ; then
+        echo "Failed to download community profile" ; exit 1 ; fi
     else
       cp "$COMM_DOWNLOAD" /var/tmp/Steamy_Cats/Community_Profile || (echo "Failed to copy community profile" ; exit 1)
     fi
 
     # Find the JSON containing our games, then extract the APP ID with JQ
-    GAMESLIST="$(grep "var rgGames" /var/tmp/Steamy_Cats/Community_Profile | \
+    games_list="$(grep "var rgGames" /var/tmp/Steamy_Cats/Community_Profile | \
       sed -e 's/var rgGames \= \[//' -e 's/\]\;//' -e 's/\,[{]/\n\{/g' | jq '.appid' | grep '[0-9]')"
-    if [ "$GAMESLIST" == "" ]
+    if [ "$games_list" == "" ]
     then
       tput bold
       echo "Is your community profile private? Check in a private browser: https://steamcommunity.com/id/yourid/games/?tab=all"
@@ -76,21 +75,21 @@ parse_config() {
           printf "\t\t\t\t\t\t\"%s\"\n" "tags"
           printf "\t\t\t\t\t\t{\n"
         } > /var/tmp/Steamy_Cats/fragments/"$appid"
-      done <<< "$GAMESLIST"
+      done <<< "$games_list"
     fi
+    echo -n "$(wc -w <<< "$games_list") games in profile :: "
   }
 
   copy_config() {
-    local BEGIN_APPS END_APPS SECCOUNT COUNT_LINES i
-
+    local apps_section games=""
     write_copy() {
       local OURSECTION
-      OURSECTION=$(grep -A100 $'^\t\t\t\t\t\"'"$1"\" <<< "$APPS_SECTION" | awk 'NR==1,/^\t\t\t\t\t}$/' | head -n -2)
+      OURSECTION=$(grep -A100 $'^\t\t\t\t\t\"'"$1"\" <<< "$apps_section" | awk 'NR==1,/^\t\t\t\t\t}$/' | head -n -2)
 
       if [ "$OURSECTION" == "" ]
       then
         echo Severe error, skipping "$1" since it would be empty, we are working on the below section:
-        grep -A100 $'\t\t\t\t\t\"'"$1" <<< "$APPS_SECTION" | awk 'NR==1,/^\t\t\t\t\t}$/'
+        grep -A100 $'\t\t\t\t\t\"'"$1" <<< "$apps_section" | awk 'NR==1,/^\t\t\t\t\t}$/'
         exit 1
       fi
 
@@ -107,56 +106,37 @@ parse_config() {
       fi
     }
 
-    # We skip the bracket and "Apps" line
-    let BEGIN_APPS=$(grep -n \"Apps\" "$1" | cut -d: -f1)+2
-
-    # We subtract one, since we don't want to include the bracket
-    let END_APPS=$(grep -n $'^\t\t\t\t}' "$1" | cut -d: -f1 | head -n1)-1
-    if [ $END_APPS -lt $BEGIN_APPS ]
-    then
-      SECCOUNT="$(grep -c $'^\t\t\t\t}' "$1")"
-      for i in $(seq 2 "$SECCOUNT")
-      do
-        let END_APPS=$(grep -n $'^\t\t\t\t}' "$1" | cut -d: -f1 | sed -n "$i"p)-1
-        if [ $END_APPS -gt $BEGIN_APPS ]
-        then
-          break
-        fi
-      done
-      if [ $END_APPS -lt $BEGIN_APPS ]
-      then
-        echo "We can't find your config section, this is a severe error and we can't continue"
-        exit 1
-      fi
-    fi
-
-    # Fixing the count here
-    let COUNT_LINES=END_APPS-BEGIN_APPS+1
-
     # Processing original configuration, wiping if set
     if [ "$WIPE_CONFIG" == "true" ]
     then
+      # Match "Apps, set f=1 then go to next record (do not print)
+      # Check for f and then match "[0-9]+", set n=1, print, go next record
+      # check for n and then match a certain number of tabs and }, n=0 and f=0
+      # check for n, print if it is present
       # Requires pgrep with lookahead support to preserve favorites
-      APPS_SECTION=$(head -n "$END_APPS" "$1" | tail -$COUNT_LINES | grep -Pv $'\t\t\t\t\t\t\t\"\d*\"\t\t\"(?!favorite)')
+      apps_section=$(awk '/^\t\t\t\t"Apps"$/{f=1;next} f&&/^\t\t\t\t\t"[0-9]+"$/{n=1;print;next} n&&/^\t\t\t\t}$/{n=0;f=0} ; n' "$1" |\
+        grep -Pv $'\t\t\t\t\t\t\t\"\d*\"\t\t\"(?!favorite)')
     else
       # We are removing categories we create here
-      APPS_SECTION=$(head -n "$END_APPS" "$1" | tail -$COUNT_LINES |\
+      apps_section=$(awk '/^\t\t\t\t"Apps"$/{f=1;next} f&&/^\t\t\t\t\t"[0-9]+"$/{n=1;print;next} n&&/^\t\t\t\t}$/{n=0;f=0} ; n' "$1" |\
         grep -v -e '"TAGS ' -e '"SFLAGS ' -e '"APP ' -e '"PDB ' -e '"RELEASE ' -e '"REVIEW ')
     fi
 
     # List of game IDs
-    GAMES=$(grep $'^\t\t\t\t\t\"[0-9]' <<< "$APPS_SECTION" | cut -d\" -f2)
+    games=$(grep $'^\t\t\t\t\t\"[0-9]' <<< "$apps_section" | cut -d\" -f2)
 
-    for game in $GAMES
+    local game
+    for game in $games
     do
       if [ "$SEQUENTIAL" == "true" ]
       then
-        write_copy "$game" || (echo "Writing config info for $GAMES failed" ; exit 1)
+        write_copy "$game" || (echo "Writing config info for $game failed" ; exit 1)
       else
-        write_copy "$game" || (echo "Writing config info for $GAMES failed" ; exit 1) &
+        write_copy "$game" || (echo "Writing config info for $game failed" ; exit 1) &
       fi
     done
     wait
+    echo "Preserved configuration for $(wc -w <<< "$games") games."
   }
 
   community_profile || (echo "Failed to write community profile" ; exit 1)
@@ -164,13 +144,10 @@ parse_config() {
   # This is where we copy the old configuration
   if [ "$FRESH_CONFIG" == "true" ]
   then
-    echo "Created $(wc -l <<< "$GAMESLIST") files."
-    return
+    echo ; return
   else
     copy_config "$@" || (echo "Failed to copy old configuration" ; exit 1)
   fi
-
-  echo "$(wc -w <<< "$GAMESLIST") games in profile :: Preserved configuration for $(wc -w <<< "$GAMES") games."
 }
 
 #######################################################################################
@@ -296,32 +273,24 @@ make_categories() {
     printf "$line" "302" "PDB MEAN $pdb_mean" >> /var/tmp/Steamy_Cats/fragments/"$1"
   }
 
-  makecats() {
-    local HIDDENLINE
+  finalize_fragments() {
+    local all_checked game_needs_all which_game
+    cd /var/tmp/Steamy_Cats/fragments/ || (echo "Our fragment location is missing" ; exit 1)
     #      echo "~FAILED~" > "$HOME/.local/share/steam_store_frontend/$1.html"
 
-    # Write the all group and tags bracket
-    if grep -q '"ALL"' /var/tmp/Steamy_Cats/fragments/"$1"
-    then
-      printf "\t\t\t\t\t\t}\n" >> /var/tmp/Steamy_Cats/fragments/"$1"
-    else
-      {
-        printf "\t\t\t\t\t\t\t\"%s\"\t\t\"ALL\"\n" "330"
-        printf "\t\t\t\t\t\t}\n"
-      } >> /var/tmp/Steamy_Cats/fragments/"$1"
+    # Writing the ALL group where it is missing
+    all_checked="$(grep -L '"ALL"' -- *)"
+    if [ "$all_checked" != "" ] ; then
+      while read -r game_needs_all ; do
+        printf "$line" "330" "ALL" >> /var/tmp/Steamy_Cats/fragments/"$game_needs_all"
+      done <<< "$all_checked"
     fi
 
-    # Fixing our handling of the Hidden field
-    if grep -q $'\t\t\t\t\t"Hidden"\t\t"' /var/tmp/Steamy_Cats/fragments/"$1"
-    then
-      HIDDENLINE=$(grep $'\t\t\t\t\t"Hidden"' /var/tmp/Steamy_Cats/fragments/"$1")
-      grep -hv $'\t\t\t\t\t"Hidden"' /var/tmp/Steamy_Cats/fragments/"$1" > /var/tmp/Steamy_Cats/rewrites/"$1"
-      cp /var/tmp/Steamy_Cats/rewrites/"$1" /var/tmp/Steamy_Cats/fragments/"$1"
-      echo "$HIDDENLINE" >> /var/tmp/Steamy_Cats/fragments/"$1"
-    fi
-
-    # Writing the closing bracket for the game id
-    printf "\t\t\t\t\t}\n" >> /var/tmp/Steamy_Cats/fragments/"$1"
+    # Writing the closing brackets
+    for which_game in * ; do
+      printf "\t\t\t\t\t\t}\n" >> /var/tmp/Steamy_Cats/fragments/"$which_game"
+      printf "\t\t\t\t\t}\n" >> /var/tmp/Steamy_Cats/fragments/"$which_game"
+    done
   }
 
   linux_native() {
@@ -423,19 +392,7 @@ make_categories() {
   flag_adult
   user_tags
   store_flags
-
-  cd /var/tmp/Steamy_Cats/fragments/ || (echo "Our fragment location is missing" ; exit 1)
-  local fragments
-  for fragments in *
-  do
-    if [ "$SEQUENTIAL" == "true" ]
-    then
-      makecats "$fragments" || (echo "Writing Tag and Flags for $fragments failed" ; exit 1)
-    else
-      makecats "$fragments" || (echo "Writing Tag and Flags for $fragments failed" ; exit 1) &
-    fi
-  done
-  wait
+  finalize_fragments
 }
 
 #######################################################################################
@@ -491,7 +448,8 @@ category_list() {
   echo "# To skip over unwanted categories, save category names to ~/.config/Steamy_Cats/exclude.conf"
   echo "# To limit the list to only those you want to include, save category names to ~/.config/Steamy_Cats/include.conf"
   echo "# Lines with comments will be ignored."
-  cat /var/tmp/Steamy_Cats/fragments/* /var/tmp/newconfig.vdf | grep -P $'\t\t\t\t\t\t\t\"\d*\"\t\t\"(?!favorite)' | cut -d\" -f4 | sort -u
+  grep -P $'\t\t\t\t\t\t\t\"\d*\"\t\t\"(?!favorite)' /var/tmp/newconfig.vdf |\
+    cut -d\" -f4 | sort -u
 }
 
 #######################################################################################
