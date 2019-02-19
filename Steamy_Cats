@@ -471,7 +471,6 @@ assemble_steam_config() {
   is_hidden="$(grep -l $'\t\t\t\t\t\t"Hidden"' -- *)"
   if [ "$is_hidden" != "" ] ; then
     while read -r hidden ; do
-      echo "We got here with $hidden"
       {
         head -n2 "$hidden"
         printf "\t\t\t\t\t\t\"Hidden\"\t\t\"1\"\n"
