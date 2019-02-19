@@ -202,7 +202,8 @@ make_categories() {
     fi
     # Mean
     pdb_mean="$(grep "\ $1," /var/tmp/Steamy_Cats/PDB.counted |\
-      awk '{v[0]="Borked";v[1]="Bronze";v[2]="Silver";v[3]="Gold";v[4]="Platinum"}
+      awk 'BEGIN {v[0]="Borked";v[1]="Bronze";
+      v[2]="Silver";v[3]="Gold";v[4]="Platinum"}
     /Borked/ { total+=$1 } /Bronze/ { total+=$1 ; sum+=($1*1) }
     /Silver/ { total+=$1 ; sum+=($1*2) } /Gold/ { total+=$1 ; sum+=($1*3) }
     /Platinum/ { total+=$1 ; sum+=($1*4)} END { print v[int((sum/total)+.5)] }')"
