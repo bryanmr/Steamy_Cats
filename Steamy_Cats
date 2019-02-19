@@ -7,15 +7,15 @@
 WIPE_CONFIG="false"
 FRESH_CONFIG="false"
 USERNUM="false"
-VDFOVERRIDE="false"
+USER_VDF="false"
 WEBACCNUM="false"
 COMM_DOWNLOAD="false"
 INCLUDE_FILE="$HOME/.config/Steamy_Cats/include.conf"
 EXCLUDE_FILE="$HOME/.config/Steamy_Cats/exclude.conf"
 
-#######################################################################################
-#### Start Script (No variables below here)                                        ####
-#######################################################################################
+######################################################################
+#### Start Script (No variables below here)                       ####
+######################################################################
 
 parse_config() {
   community_profile() {
@@ -23,10 +23,12 @@ parse_config() {
     if [ "$COMM_DOWNLOAD" == "false" ]
     then
       echo "Downloading your community profile, if public, and then getting full list of games you own"
-      if ! curl -sLo /var/tmp/Steamy_Cats/Community_Profile "https://steamcommunity.com/profiles/$WEBACCNUM/games/?tab=all" ; then
-        echo "Failed to download community profile" ; exit 1 ; fi
+      curl -sLo /var/tmp/Steamy_Cats/Community_Profile \
+        "https://steamcommunity.com/profiles/$WEBACCNUM/games/?tab=all" ||\
+        oops "Failed to download community profile"
     else
-      cp "$COMM_DOWNLOAD" /var/tmp/Steamy_Cats/Community_Profile || (echo "Failed to copy community profile" ; exit 1)
+      cp "$COMM_DOWNLOAD" /var/tmp/Steamy_Cats/Community_Profile ||\
+        oops Failed to copy community profile
     fi
 
     # Find the JSON containing our games, then extract the APP ID with JQ
@@ -35,7 +37,7 @@ parse_config() {
     if [ "$games_list" == "" ]
     then
       tput bold
-      echo "Is your community profile private? Check in a private browser: https://steamcommunity.com/id/yourid/games/?tab=all"
+      echo "Is your community profile private? Check in a private browser: https://steamcommunity.com/profiles/$WEBACCNUM/games/?tab=all"
       echo "You can download the file manually and run the script with --comm-html=/path/to/file"
       echo "Alternatively, you can add all games to a group so they show up in your local configuration"
       tput sgr0
@@ -56,11 +58,6 @@ parse_config() {
   copy_config() {
     local apps_section games tags_missing check_tags
     if [ "$WIPE_CONFIG" == "true" ] ; then
-      # Skip closing brackets
-      # Match "Apps", set f=1 then go to next record (do not print)
-      # Check for f and then match "[0-9]+", set n=1, print, go next record
-      # check for n and then match a certain number of tabs and }, n=0 and f=0
-      # check for n, print if it is present
       # Requires pgrep with lookahead support to preserve favorites
       apps_section=$(awk '/^\t\t\t\t\t}$/{next}
       /^\t\t\t\t\t\t}$/{next}
@@ -94,12 +91,12 @@ parse_config() {
     echo "Preserved configuration for $(wc -w <<< "$games") games."
   }
 
-  community_profile || (echo "Failed to write community profile" ; exit 1)
+  community_profile || oops "Failed to write community profile"
 
   if [ "$FRESH_CONFIG" == "true" ] ; then
     echo ; return
   else
-    copy_config "$@" || (echo "Failed to copy old configuration" ; exit 1)
+    copy_config "$@" || oops "Failed to copy old configuration"
   fi
 }
 download_store() {
@@ -109,7 +106,7 @@ download_store() {
   DL_COUNT SLEEP_NOW i
 
   cleandls() {
-    cd "$DLOC" || (echo "Download location does not exist." ; exit 1)
+    cd "$DLOC" || oops "Download location does not exist."
     if [ ! "$(ls -A)" ]; then return ; fi
 
     if grep -q '>Error<' -- *
@@ -136,7 +133,7 @@ download_store() {
   cleandls
 
   # We gather the list of files to be downloaded
-  cd /var/tmp/Steamy_Cats/fragments || (echo "Our fragment location is missing" ; exit 1)
+  cd /var/tmp/Steamy_Cats/fragments || oops "Our fragment location is missing"
   for i in *
   do 
     if [ ! -e "$DLOC""$i".html ]
@@ -210,10 +207,9 @@ make_categories() {
     )" # I have a feeling this whole thing can be done in awk, so that is a todo
     printf "$line" "302" "PDB MEAN $pdb_mean" >> /var/tmp/Steamy_Cats/fragments/"$1"
   }
-
   finalize_fragments() {
     local all_checked game_needs_all which_game
-    cd /var/tmp/Steamy_Cats/fragments/ || (echo "Our fragment location is missing" ; exit 1)
+    cd /var/tmp/Steamy_Cats/fragments/ || oops "Our fragment location is missing"
     #      echo "~FAILED~" > "$HOME/.local/share/steam_store_frontend/$1.html"
 
     # Writing the ALL group where it is missing
@@ -230,7 +226,6 @@ make_categories() {
       printf "\t\t\t\t\t}\n" >> /var/tmp/Steamy_Cats/fragments/"$which_game"
     done
   }
-
   linux_native() {
     local which_game
     grep -Hl 'data-os="linux">' -- * | cut -d. -f1 > /var/tmp/Steamy_Cats/Linux
@@ -245,15 +240,13 @@ make_categories() {
       fi
     done <<< "$(sort -u /var/tmp/Steamy_Cats/Linux)"
   }
-
   pdb_if_not_linux() {
     local which_game
     while read -r which_game ; do
-      write_proton_db_scores "$which_game" || (echo "ProtonDB score failed" ; exit 1) &
+      write_proton_db_scores "$which_game" || oops "ProtonDB score failed" &
     done <<< "$(cd /var/tmp/Steamy_Cats/fragments/ && grep -L LINUX -- *)"
     wait
   }
-
   rel_date() {
     local which_game rel_year
     while IFS="." read -r which_game rel_year ; do
@@ -262,7 +255,6 @@ make_categories() {
       fi
     done <<< "$(grep -H "<b>Release Date:" -- * | sed -nr 's/([0-9]*\.).*([0-9]{4}).*/\1\2/p')"
   }
-
   reviews() {
     local which_game rev_score
     while IFS="~" read -r which_game rev_score ; do
@@ -271,7 +263,6 @@ make_categories() {
       fi
     done <<< "$(grep -HA1 "Overall Reviews:" -- * | grep "game_review_summary" | grep -v "Need more user reviews" | sed 's/\..*\">/~/' | cut -d\< -f1)"
   }
-
   flag_adult() {
     local which_game
     while read -r which_game ; do
@@ -280,7 +271,6 @@ make_categories() {
       fi
     done <<< "$(grep -l "You must login to see this content." -- *.html | cut -d. -f1)"
   }
-
   user_tags() {
     local values countnum val
     while IFS="," read -ra values ; do
@@ -297,7 +287,6 @@ make_categories() {
       sed -E -e 's/\],/]}/' -e 's/\.html://' -e 's/([0-9]+)/{"\1":/' |\
       jq -cr 'keys[] as $keys | .[] | [$keys, .[].name] | join(",")')"
   }
-
   store_flags() {
     local values countnum val
     while IFS="," read -ra values ; do
@@ -317,7 +306,7 @@ make_categories() {
   }
 
   echo "Adding new category tags to the games!"
-  cd "$HOME"/.local/share/steam_store_frontend/ || (echo "Downloads location does not exist, can't parse" ; exit 1)
+  cd "$HOME"/.local/share/steam_store_frontend/ || oops "Downloads location does not exist, can't parse"
   linux_native && pdb_if_not_linux
   rel_date
   reviews
@@ -333,16 +322,17 @@ download_proton_db() {
   check_pdb() {
     if [ ! -d "$PDBLOC" ]
     then
-      cd "$HOME"/.local/share/ || (echo ".local/share does not exist, exiting" ; exit 1)
+      cd "$HOME"/.local/share/ || oops ".local/share does not exist, exiting"
       echo "Downloading Proton DB Info using Git"
-      git clone https://github.com/bdefore/protondb-data.git &> /dev/null || (echo "Cannot download ProtonDB, error" ; exit 1)
+      git clone https://github.com/bdefore/protondb-data.git &> /dev/null ||\
+        oops "Cannot download ProtonDB, error"
     fi
   }
 
   rm -f "$PDBLOC"/reports/reports_piiremoved.json
 
   check_pdb
-  cd "$PDBLOC"/reports || (echo "Proton DB download does not exit, error" ; exit 1)
+  cd "$PDBLOC"/reports || oops "Proton DB download does not exit, error"
 
   YEAR=$(find . | cut -d_ -f3 | sort -ru | head -n1)
   MONTH=$(find . | grep "$YEAR" | cut -d_ -f2 | sort -Mr | head -n1 | cut -b1-3)
@@ -350,18 +340,18 @@ download_proton_db() {
   # If there is a new Proton DB, we should try to get it
   if [ "$MONTH" != "$(date +%b | tr '[:upper:]' '[:lower:]')" ]
   then
-    cd ../.. || (echo "Failed to move up directories" ; exit 1)
+    cd ../.. || oops "Failed to move up directories"
     rm -rf "$PDBLOC"
     check_pdb
 
-    cd "$PDBLOC"/reports || (echo "Reports folder does not exist for ProtonDB" ; exit 1)
+    cd "$PDBLOC"/reports || oops "Reports folder does not exist for ProtonDB"
     YEAR=$(find . | cut -d_ -f3 | sort -ru | head -n1)
     MONTH=$(find . | grep "$YEAR" | cut -d_ -f2 | sort -Mr | head -n1)
   fi
 
   TAR_FILENAME=$(find . | grep "$YEAR" | grep "$MONTH")
   echo "Most recent ProtonDB file appears to be: $TAR_FILENAME"
-  tar -zxvf "$TAR_FILENAME" > /dev/null || (echo "Untarring the ProtonDB failed somehow" ; exit 1)
+  tar -zxvf "$TAR_FILENAME" > /dev/null || oops "Untarring the ProtonDB failed somehow"
   jq -r '.[] | [.appId, .rating] | join(",")' "$PDBLOC"/reports/reports_piiremoved.json > /var/tmp/Steamy_Cats/PDB.csv
 }
 category_list() {
@@ -374,31 +364,16 @@ category_list() {
     cut -d\" -f4 | sort -u
 }
 check_valid() {
-  local BRACKETS PDB_PLAT NATIVECOUNT
-  BRACKETS="$(tr -cd '{}' < "$1")"
-  while [[ "$BRACKETS" = *'{}'* ]]
-  do
-    BRACKETS="${BRACKETS//{}/}"
-  done
+  local brackets
+  brackets="$(tr -cd '{}' < "$1" | sed ':loop;s/{}//g;t loop')"
+  quotes="$(tr -cd '"' < "$1" | sed 's/""//g')"
 
-  if [ "$BRACKETS" == "" ]
+  if [ "$brackets" != "" ] || [ "$quotes" != "" ]
   then
-    echo "The configuration has some problems with matching brackets..."
-    echo "Emergency surgery is required on the script immediately."
-    echo "Here are your brackets back: $BRACKETS"
-    exit 1
-  else
-    # If we are looking at the new config, do a count of what we have
-    if [ "$1" == "/var/tmp/newconfig.vdf" ]
-    then
-      PDB_PLAT="$(grep PDB\ MODE\ Platinum /var/tmp/newconfig.vdf | sort -n | uniq -c | awk '{print  $1}')"
-      NATIVECOUNT="$(grep APP\ NATIVE\ LINUX /var/tmp/newconfig.vdf | sort -n | uniq -c | awk '{print  $1}')"
-      echo "PDB Platinum Ratings: $PDB_PLAT :: Native Games: $NATIVECOUNT"
-      echo "Any missing games should be added to a group, such as ALL, and then the script rerun"
-      echo "Old config backed up to /var/tmp/oldconfig.vdf"
-      echo "New config written. To apply, run the below command:"
-      echo "cp /var/tmp/newconfig.vdf $2"
-    fi
+    echo "The configuration has some errors."
+    echo "Here are your unmatched brackets: $brackets"
+    echo "Here are your unmatched quotes: $quotes"
+    oops "Configuration file $1 invalid"
   fi
 }
 assemble_steam_config() {
@@ -406,7 +381,7 @@ assemble_steam_config() {
   echo "Creating final configuration"
 
   # Dealing with games that are hidden
-  cd /var/tmp/Steamy_Cats/fragments/ || exit 1
+  cd /var/tmp/Steamy_Cats/fragments/ || oops "Our fragments location missing"
   is_hidden="$(grep -l $'\t\t\t\t\t\t"Hidden"' -- *)"
   if [ "$is_hidden" != "" ] ; then
     while read -r hidden ; do
@@ -462,7 +437,7 @@ helpoutput() {
   --category-list : Returns the list of categories available
   --vdf-file : Name of a VDF configuration to use instead of the script discovered one
   Usage: --vdf-file=/path/to/file.vdf
-    Shell Variable: VDFOVERRIDE
+    Shell Variable: USER_VDF
   --steam-user-id : The numeric USER ID for your Steam account
   Usage: --steam-user-id=77777777777777777
     Shell Variable: WEBACCNUM
@@ -480,66 +455,68 @@ helpoutput() {
     Shell Variable: EXCLUDE_FILE"
 }
 find_config() {
-  which_user() {
-    local NAMES NUMNAMES line num
-    NAMES="$(grep PersonaName ~/.steam/steam/userdata/*/config/localconfig.vdf | cut -d\" -f4)"
-    NUMNAMES="$(wc -l <<< "$NAMES")"
+  local listnum steam_account_name user_names
 
-    if [ "$NUMNAMES" -gt 1 ]
-    then
-      if [ "$USERNUM" == "false" ]
-      then
-        echo "$NUMNAMES possible users to make Steam categories for:"
-        NUMCYCLE=1
-        while read -r line
-        do
-          echo "$NUMCYCLE : $line"
-          let NUMCYCLE=$NUMCYCLE+1
-        done <<< "$NAMES"
+  user_names="$(grep PersonaName \
+    ~/.steam/steam/userdata/*/config/localconfig.vdf | cut -d\" -f4)"
 
-        read -rp "Enter the number for the user you want to use. Answer: " WHICHSTEAM
-      else
-        WHICHSTEAM="$USERNUM"
-      fi
+  gen_user_menu() {
+    local num_names username times_through=1
+    num_names="$(wc -l <<< "$user_names")"
+    if [ "$num_names" -gt 1 ] && [ "$USERNUM" == "false" ] ; then
+      echo "$num_names possible users to make Steam categories for:"
 
-      num='^[0-9]+$'
-      if ! [[ $WHICHSTEAM =~ $num ]]
-      then
-        echo "Response must be a number. Run the script again."
-        exit 1
-      fi
-
-      WHICHACC=$(echo "$NAMES" | sed -n "$WHICHSTEAM"p)
-    else
-      WHICHSTEAM=1
-      WHICHACC="$NAMES"
+      while read -r username ; do
+        echo "$times_through : $username"
+        let times_through++
+      done <<< "$user_names"
     fi
   }
-
-  if [ "$VDFOVERRIDE" == "false" ]
-  then
-    # Parse out which user directory we are using
-    which_user
-
-    # We should check to see if the username can be found in users
-    # If the name has been changed and no Steam restart, had an error
-    if grep -qFB3 "$WHICHACC" ~/.steam/steam/config/loginusers.vdf
-    then
-      WEBACCNUM=$(grep -FB3 "$WHICHACC" ~/.steam/steam/config/loginusers.vdf | head -n1 | cut -d\" -f2)
-    else
-      echo "We can't find your username, try restarting Steam"
-      echo "This can happen if you changed your username or have not logged in for a while"
-      exit 1
+  which_user() {
+    local list_position=1
+    if [ "$(wc -l <<< "$user_names")" -gt 1 ] && [ "$USERNUM" == "false" ]; then
+      read -rp \
+        "Enter the number for the user you want to use. Answer: " list_position
+    elif [ "$USERNUM" != "false" ] ; then
+      list_position="$USERNUM"
     fi
 
-    echo "We are using: $WHICHACC :: $WEBACCNUM"
+    if ! [[ $list_position =~ ^[0-9]+$ ]] ; then
+      oops "Response must be a number. Run the script again."
+    fi
 
-    OUR_CONFIG="$(grep -H PersonaName ~/.steam/steam/userdata/*/config/localconfig.vdf | sed -n "$WHICHSTEAM"p \
-      | cut -d: -f1 | sed 's/config\/localconfig\.vdf//')7/remote/sharedconfig.vdf"
+    echo "$list_position"
+  }
+
+  if [ "$USER_VDF" == "false" ] ; then
+    gen_user_menu || oops Generating the user menu failed
+    if ! listnum="$(which_user)" ; then
+      oops Failed to set which user to use
+    fi
+
+    steam_account_name=$(echo "$user_names" | sed -n "$listnum"p)
+
+    grep -qFB3 "$steam_account_name" ~/.steam/steam/config/loginusers.vdf ||\
+      oops "We can't find your username, try restarting Steam"
+
+    # This is a global variable
+    if [ "$WEBACCNUM" == "false" ] ; then
+      WEBACCNUM=$(grep -FB3 "$steam_account_name" ~/.steam/steam/config/loginusers.vdf | head -n1 | cut -d\" -f2)
+    fi
+
+    echo "We are using: $steam_account_name :: $WEBACCNUM"
+
+    # This is a globale variable
+    USER_VDF="$(grep -H PersonaName \
+      ~/.steam/steam/userdata/*/config/localconfig.vdf |\
+      sed -n "$listnum"p |\
+      cut -d: -f1 |\
+      sed 's/config\/localconfig\.vdf//')7/remote/sharedconfig.vdf"
+  elif [ "$WEBACCNUM" == "false" ] && [ "$USER_VDF" != "false" ] ; then
+      oops You have to set the WEBACCNUM if you manually set USER_VDF
   else
-    OUR_CONFIG="$VDFOVERRIDE"
-    echo "Not discovering Steam User ID Number, set with --steam-user-id switch"
-    echo "Currently set to: $WEBACCNUM"
+    echo "VDF file set by CLI to: $USER_VDF"
+    echo "Steam User ID Number by --steam-user-id set to: $WEBACCNUM"
   fi
 }
 parse_args() {
@@ -567,8 +544,8 @@ parse_args() {
         exit
         ;;
       "--vdf-file"*)
-        VDFOVERRIDE="$( cut -d= -f2 <<< "$cliarg")"
-        echo "Using the VDF Config file $VDFOVERRIDE"
+        USER_VDF="$( cut -d= -f2 <<< "$cliarg")"
+        echo "Using the VDF Config file $USER_VDF"
         ;;
       "--steam-user-id"*)
         WEBACCNUM="$(cut -d= -f2 <<< "$cliarg")"
@@ -600,68 +577,67 @@ parse_args() {
       *)
         echo "Unknown option: $cliarg"
         helpoutput
-        exit
+        exit 1
         ;;
     esac
   done
 }
+oops() {
+  tput bold
+  echo "Exit Code: $? ~~ Last Command: $this_command"
+  echo "$@"
+  tput sgr0
+  exit 1
+}
 main() {
   set -uEeo pipefail
-
   renice 19 $$ > /dev/null
-
-  if ! type jq > /dev/null; then
-    echo Script requires jq to be installed; exit 1; fi
-  if ! type git > /dev/null; then
-    echo Script requires git to be installed; exit 1; fi
-
   this_command="false"
   previous_command="false"
   trap 'previous_command=$this_command; this_command=$BASH_COMMAND' DEBUG
   trap 'rm -rf "/var/tmp/Steamy_Cats/"' EXIT
-  trap '(echo "Exit Code: $? ~~ Last Command: $previous_command" ; exit 1)' ERR
+  trap 'echo "Exit Code: $? ~~ Last Command: $previous_command" ; exit 1' ERR
+
+  type jq > /dev/null || oops Script requires jq to be installed
+  type git > /dev/null || oops Script requires git to be installed
 
   rm -rf /var/tmp/Steamy_Cats/
   mkdir -p /var/tmp/Steamy_Cats/fragments/ /var/tmp/Steamy_Cats/rewrites/
 
-  parse_args "$@"
+  parse_args "$@" || oops Arguments invalid
+  find_config || oops Could not find config
 
-  local OUR_CONFIG="Not Found"
+  echo "Our config file is: $USER_VDF"
 
-  # Identify what VDF config file we are going to use
-  find_config
+  check_valid "$USER_VDF" ||\
+    oops "The configuration at $USER_VDF fails validation"
 
-  echo "Our config file is: $OUR_CONFIG"
+  cp "$USER_VDF" /var/tmp/oldconfig.vdf || oops Config not found
 
-  if [ ! -e "$OUR_CONFIG" ]
-  then
-    echo "We can't find the config file: $OUR_CONFIG"
-    echo "This is important, so we are quitting."
-    exit 1
+  if [ ! -f "$USER_VDF"~ ] ; then
+    echo "Copying original config to $USER_VDF~"
+    cp "$USER_VDF" "$USER_VDF"~ || oops Could not copy config
   fi
 
-  if ! check_valid "$OUR_CONFIG"
-  then
-    tput bold
-    echo "The configuration at $OUR_CONFIG fails validation"
-    tput sgr0
-  fi
+  parse_config "$USER_VDF" || oops Parsing config failed
+  download_store || oops Downloading store details failed
+  download_proton_db || oops Downloading ProtonDB failed
+  make_categories || oops Making categories failed
+  assemble_steam_config "$USER_VDF" || oops Assembling final config failed
+  check_valid "/var/tmp/newconfig.vdf" || oops Final config invalid
 
-  cp "$OUR_CONFIG" /var/tmp/oldconfig.vdf || (echo "Copying config failed, not doing anything more" ; exit 1)
-
-  # This should only go on the first run, saving original untouched just in case
-  if [ ! -f "$OUR_CONFIG"~ ]
-  then
-    echo "This is our first time running, preserving original config"
-    cp "$OUR_CONFIG" "$OUR_CONFIG"~ || (echo "Preserve Original File Failed!" ; exit 1)
-  fi
-
-  parse_config "$OUR_CONFIG"
-  download_store
-  download_proton_db
-  make_categories
-  assemble_steam_config "$OUR_CONFIG"
-  check_valid "/var/tmp/newconfig.vdf" "$OUR_CONFIG"
+  pdb_plat="$(grep PDB\ MODE\ Platinum /var/tmp/newconfig.vdf |\
+    sort -n | uniq -c | awk '{print  $1}')"
+  native_count="$(grep APP\ NATIVE\ LINUX /var/tmp/newconfig.vdf |\
+    sort -n | uniq -c | awk '{print  $1}')"
+  echo "PDB Platinum Ratings: $pdb_plat :: Native Games: $native_count"
+  echo "Games not getting categories? In Steam, add to a group."
+  echo "All games that have a group in Steam will be found by script"
+  echo
+  echo "Old config backed up to /var/tmp/oldconfig.vdf"
+  echo "Original config backed up to $USER_VDF~"
+  echo "New config written. To apply, run the below command:"
+  echo "cp /var/tmp/newconfig.vdf $USER_VDF"
 }
 
 main "$@"
