@@ -7,7 +7,6 @@
 WIPE_CONFIG="false"
 CLEAN_DLS="false"
 FRESH_CONFIG="false"
-SEQUENTIAL="false"
 USERNUM="false"
 VDFOVERRIDE="false"
 WEBACCNUM="false"
@@ -83,12 +82,15 @@ parse_config() {
   copy_config() {
     local apps_section games tags_missing check_tags
     if [ "$WIPE_CONFIG" == "true" ] ; then
+      # Skip closing brackets
       # Match "Apps", set f=1 then go to next record (do not print)
       # Check for f and then match "[0-9]+", set n=1, print, go next record
       # check for n and then match a certain number of tabs and }, n=0 and f=0
       # check for n, print if it is present
       # Requires pgrep with lookahead support to preserve favorites
-      apps_section=$(awk '/^\t\t\t\t"Apps"$/{f=1;next}
+      apps_section=$(awk '/^\t\t\t\t\t}$/{next}
+      /^\t\t\t\t\t\t}$/{next}
+      /^\t\t\t\t"Apps"$/{f=1;next}
       f&&/^\t\t\t\t\t"[0-9]+"$/{n=1;print;next}
       n&&/^\t\t\t\t}$/{n=0;f=0} ; n' "$1" |\
         grep -Pv $'\t\t\t\t\t\t\t\"\d*\"\t\t\"(?!favorite)')
@@ -108,11 +110,11 @@ parse_config() {
     check_tags="$(cd /var/tmp/Steamy_Cats/fragments/ &&\
       grep -L $'\t\t\t\t\t\"tags\"' -- *)"
     if [ "$check_tags" != "" ] ; then
-    while read -r tags_missing ; do
-      printf "\t\t\t\t\t\t\"tags\"\n" >> /var/tmp/Steamy_Cats/fragments/"$tags_missing"
-      printf "\t\t\t\t\t\t{\n" >> /var/tmp/Steamy_Cats/fragments/"$tags_missing"
-    done <<< "$check_tags"
-  fi
+      while read -r tags_missing ; do
+        printf "\t\t\t\t\t\t\"tags\"\n" >> /var/tmp/Steamy_Cats/fragments/"$tags_missing"
+        printf "\t\t\t\t\t\t{\n" >> /var/tmp/Steamy_Cats/fragments/"$tags_missing"
+      done <<< "$check_tags"
+    fi
 
     games=$(grep $'^\t\t\t\t\t\"[0-9]' <<< "$apps_section" | cut -d\" -f2)
     echo "Preserved configuration for $(wc -w <<< "$games") games."
@@ -287,16 +289,10 @@ make_categories() {
 
   pdb_if_not_linux() {
     local which_game
-    if [ "$SEQUENTIAL" == "true" ] ; then
-      while read -r which_game ; do
-        write_proton_db_scores "$which_game" || (echo "ProtonDB score failed" ; exit 1)
-      done <<< "$(cd /var/tmp/Steamy_Cats/fragments/ && grep -L LINUX -- *)"
-    else
-      while read -r which_game ; do
-        write_proton_db_scores "$which_game" || (echo "ProtonDB score failed" ; exit 1) &
-      done <<< "$(cd /var/tmp/Steamy_Cats/fragments/ && grep -L LINUX -- *)"
-      wait
-    fi
+    while read -r which_game ; do
+      write_proton_db_scores "$which_game" || (echo "ProtonDB score failed" ; exit 1) &
+    done <<< "$(cd /var/tmp/Steamy_Cats/fragments/ && grep -L LINUX -- *)"
+    wait
   }
 
   rel_date() {
@@ -467,32 +463,15 @@ check_valid() {
 #######################################################################################
 
 assemble_steam_config() {
-  local BEGIN_APPS END_APPS SECCOUNT i
+  local apps_begin apps_end
   echo "Creating final configuration"
 
-  let BEGIN_APPS=$(grep -n \"Apps\" "$1" | cut -d: -f1)+1
+  let apps_begin=$(grep -n \"Apps\" "$1" | cut -d: -f1)+1
 
-  let END_APPS=$(grep -n $'^\t\t\t\t}' "$1" | cut -d: -f1 | head -n1)
-  if [ $END_APPS -lt $BEGIN_APPS ]
-  then
-    SECCOUNT="$(grep -c $'^\t\t\t\t}' "$1")"
-    for i in $(seq 2 "$SECCOUNT")
-    do
-      let END_APPS=$(grep -n $'^\t\t\t\t}' "$1" | cut -d: -f1 | sed -n "$i"p)
-      if [ $END_APPS -gt $BEGIN_APPS ]
-      then
-        break
-      fi
-    done
-    if [ $END_APPS -lt $BEGIN_APPS ]
-    then
-      echo "We can't find your config section, this is a severe error and we can't continue"
-      exit 1
-    fi
-  fi
+  let apps_end=$(awk '/^\t\t\t\t"Apps"$/{f=1;next} f&&/^\t\t\t\t}$/{print NR;f=0}' "$1")
 
   # Attaching the top of the config
-  head -n"$BEGIN_APPS" "$1" > /var/tmp/newconfig.vdf
+  head -n"$apps_begin" "$1" > /var/tmp/newconfig.vdf
 
   if [ -f "$INCLUDE_FILE" ]
   then
@@ -514,7 +493,7 @@ assemble_steam_config() {
   fi
 
   # Adding the bottom of the config
-  tail -n+"$END_APPS" "$1" >> /var/tmp/newconfig.vdf
+  tail -n+"$apps_end" "$1" >> /var/tmp/newconfig.vdf
 }
 
 #######################################################################################
@@ -526,8 +505,6 @@ helpoutput() {
   Options include:
   --debug : Turn on lots of things to exit on error and show commands being ran
   You should also consider --sequential with --debug for more meaningful output
-  --sequential : Runs commands one at a time instead of in parallel
-    Shell Variable: SEQUENTIAL
   --profiler : Prepends timestamp and shows all commands ran
   Intended to be redirected to file for profiling of code
   --ignore-old-categories : Gets rid of all category configuration while retaining favorites
@@ -638,9 +615,6 @@ parse_args() {
       "--debug")
         set -x
         trap 'echo "Script Exited, files not cleaned up"' EXIT
-        ;;
-      "--sequential")
-        SEQUENTIAL="true"
         ;;
       "--profiler")
         set -x
