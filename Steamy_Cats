@@ -5,7 +5,6 @@
 # You can set variables here, or pass command line arguments
 # Check --help to learn how to set the below variables
 WIPE_CONFIG="false"
-CLEAN_DLS="false"
 FRESH_CONFIG="false"
 USERNUM="false"
 VDFOVERRIDE="false"
@@ -136,35 +135,30 @@ parse_config() {
 download_store() {
   local DLOC="$HOME/.local/share/steam_store_frontend/" \
   TLOC="https://store.steampowered.com/app/" \
-  NUMEXISTS=0 DOWNLOADING=0 DL_LIST="" GREPCOUNT DOWNLOADED=0 \
+  NUMEXISTS=0 DOWNLOADING=0 DL_LIST="" DOWNLOADED=0 \
   DL_COUNT SLEEP_NOW i
 
   cleandls() {
     cd "$DLOC" || (echo "Download location does not exist." ; exit 1)
+    if [ ! "$(ls -A)" ]; then return ; fi
+
     if grep -q '>Error<' -- *
     then
+      echo "Some files had errors. Deleting"
+      set -x
       grep -Zl '>Error<' -- * | xargs --null rm
+      set +x
+      echo "Done deleting files."
     fi
 
     # Files from being rate limited should be deleted
     if grep -q '>Access Denied<' -- *
     then
-      GREPCOUNT=$(grep 'TITLE>Access Denied<' -- *)
-      echo "Deleting $(wc -l <<< "$GREPCOUNT") files"
+      echo "API rate limit hit? Deleting some files."
+      set -x
       grep -Zl '>Access Denied<' -- * | xargs --null rm
-    fi
-
-    # This is set through a CLI switch
-    if [ "$CLEAN_DLS" == "true" ]
-    then
-      if grep -q '~FAILED~' -- *
-      then
-        grep -Zl '~FAILED~' -- * | xargs --null rm
-      fi
-
-      # Corrupt downloads
-      find "$DLOC" -size -27c -type f -delete
-      find "$DLOC" -empty -type f -delete
+      set +x
+      echo "Done deleting files."
     fi
   }
 
@@ -186,7 +180,7 @@ download_store() {
 
   if [ "$(wc -w <<< "$DL_LIST")" -lt 1 ]
   then
-    echo "All downloads completed already, run with --clean-dls if you want to force redownload"
+    echo "All downloads completed already. Check $DLOC if something is wrong."
   else
     if [ "$(wc -w <<< "$DL_LIST")" -gt 25 ]
     then
@@ -525,8 +519,6 @@ helpoutput() {
     Shell Variable: WIPE_CONFIG
   --clear-whole-config : Preserves nothing from old configuration
     Shell Variable: FRESH_CONFIG
-  --clean-dls : Gets rid of failed downloads and tries again
-    Shell Variable: CLEAN_DLS
   --category-list : Returns the list of categories available
   --vdf-file : Name of a VDF configuration to use instead of the script discovered one
   Usage: --vdf-file=/path/to/file.vdf
@@ -639,9 +631,6 @@ parse_args() {
         ;;
       "--clear-whole-config")
         FRESH_CONFIG="true"
-        ;;
-      "--clean-dls")
-        CLEAN_DLS="true"
         ;;
       "--category-list")
         category_list
