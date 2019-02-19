@@ -595,7 +595,7 @@ main() {
   this_command="false"
   previous_command="false"
   trap 'previous_command=$this_command; this_command=$BASH_COMMAND' DEBUG
-  trap 'rm -rf "/var/tmp/Steamy_Cats/"' EXIT
+  trap 'rm -rf "/var/tmp/Steamy_Cats/" ; exit' EXIT SIGINT SIGQUIT SIGTERM
   trap 'echo "Exit Code: $? ~~ Last Command: $previous_command" ; exit 1' ERR
 
   type jq > /dev/null || oops Script requires jq to be installed
