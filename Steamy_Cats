@@ -463,8 +463,23 @@ check_valid() {
 #######################################################################################
 
 assemble_steam_config() {
-  local apps_begin apps_end
+  local apps_begin apps_end hidden is_hidden
   echo "Creating final configuration"
+
+  # Dealing with games that are hidden
+  cd /var/tmp/Steamy_Cats/fragments/ || exit 1
+  is_hidden="$(grep -l $'\t\t\t\t\t\t"Hidden"' -- *)"
+  if [ "$is_hidden" != "" ] ; then
+    while read -r hidden ; do
+      echo "We got here with $hidden"
+      {
+        head -n2 "$hidden"
+        printf "\t\t\t\t\t\t\"Hidden\"\t\t\"1\"\n"
+        tail -n+3 "$hidden" | grep -v $'\t\t\t\t\t"Hidden"\t\t"1"'
+      } >> /var/tmp/Steamy_Cats/hidden_managed
+    done <<< "$is_hidden"
+  fi
+  grep -L $'\t\t\t\t\t\t"Hidden"' -- * | xargs cat >> /var/tmp/Steamy_Cats/hidden_managed
 
   let apps_begin=$(grep -n \"Apps\" "$1" | cut -d: -f1)+1
 
@@ -476,12 +491,12 @@ assemble_steam_config() {
   if [ -f "$INCLUDE_FILE" ]
   then
     # We are going to get a diff of what we have and what we want, then get rid of the difference
-    cat /var/tmp/Steamy_Cats/fragments/* | grep -P $'\t\t\t\t\t\t\t\"\d*\"\t\t\"(?!favorite)' | cut -d\" -f4 | sort -u > /var/tmp/Steamy_Cats/List
+    grep -P $'\t\t\t\t\t\t\t\"\d*\"\t\t\"(?!favorite)' /var/tmp/Steamy_Cats/hidden_managed | cut -d\" -f4 | sort -u > /var/tmp/Steamy_Cats/List
     grep -v "^#" "$INCLUDE_FILE" > /var/tmp/Steamy_Cats/Includes
     grep -hvf /var/tmp/Steamy_Cats/Includes /var/tmp/Steamy_Cats/List > /var/tmp/Steamy_Cats/Diff
-    grep -vhf /var/tmp/Steamy_Cats/Diff /var/tmp/Steamy_Cats/fragments/* > /var/tmp/Steamy_Cats/tempconfig.vdf
+    grep -vhf /var/tmp/Steamy_Cats/Diff /var/tmp/Steamy_Cats/hidden_managed > /var/tmp/Steamy_Cats/tempconfig.vdf
   else
-    cat /var/tmp/Steamy_Cats/fragments/* > /var/tmp/Steamy_Cats/tempconfig.vdf
+    cat /var/tmp/Steamy_Cats/hidden_managed > /var/tmp/Steamy_Cats/tempconfig.vdf
   fi
 
   if [ -f "$EXCLUDE_FILE" ]
