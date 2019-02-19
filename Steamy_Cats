@@ -17,31 +17,6 @@ EXCLUDE_FILE="$HOME/.config/Steamy_Cats/exclude.conf"
 #### Start Script (No variables below here)                                        ####
 #######################################################################################
 
-set -uEeo pipefail
-
-# Since we go pretty ham with parallel operations
-renice 19 $$ > /dev/null
-
-if ! type jq > /dev/null; then
-  echo Script requires jq to be installed; exit 1; fi
-if ! type git > /dev/null; then
-  echo Script requires git to be installed; exit 1; fi
-
-this_command="false"
-previous_command="false"
-trap 'previous_command=$this_command; this_command=$BASH_COMMAND' DEBUG
-trap 'rm -rf "/var/tmp/Steamy_Cats/"' EXIT
-trap '(echo "Exit Code: $? ~~ Last Command: $previous_command" ; exit 1)' ERR
-
-rm -rf /var/tmp/Steamy_Cats/
-mkdir -p /var/tmp/Steamy_Cats/fragments/ /var/tmp/Steamy_Cats/rewrites/
-
-# See bottom of script for main function
-
-#######################################################################################
-#### Parse Steam config and make game files                                        ####
-#######################################################################################
-
 parse_config() {
   community_profile() {
     local appid games_list
@@ -127,11 +102,6 @@ parse_config() {
     copy_config "$@" || (echo "Failed to copy old configuration" ; exit 1)
   fi
 }
-
-#######################################################################################
-#### Download Game Details from Steam Store                                        ####
-#######################################################################################
-
 download_store() {
   local DLOC="$HOME/.local/share/steam_store_frontend/" \
   TLOC="https://store.steampowered.com/app/" \
@@ -216,11 +186,6 @@ download_store() {
     echo "Downloads complete for the Store Frontend."
   fi
 }
-
-#######################################################################################
-#### Make Categories                                                               ####
-#######################################################################################
-
 make_categories() {
   local line="\t\t\t\t\t\t\t\"%s\"\t\t\"%s\"\n"
 
@@ -361,11 +326,6 @@ make_categories() {
   store_flags
   finalize_fragments
 }
-
-#######################################################################################
-#### ProtonDB Ratings                                                              ####
-#######################################################################################
-
 download_proton_db() {
   local YEAR MONTH PDBLOC="$HOME/.local/share/protondb-data/" \
     TAR_FILENAME
@@ -404,11 +364,6 @@ download_proton_db() {
   tar -zxvf "$TAR_FILENAME" > /dev/null || (echo "Untarring the ProtonDB failed somehow" ; exit 1)
   jq -r '.[] | [.appId, .rating] | join(",")' "$PDBLOC"/reports/reports_piiremoved.json > /var/tmp/Steamy_Cats/PDB.csv
 }
-
-#######################################################################################
-#### Category List                                                                 ####
-#######################################################################################
-
 category_list() {
   mkdir -p ~/.config/Steamy_Cats/
   echo "# List of all categories that games are assigned"
@@ -418,11 +373,6 @@ category_list() {
   grep -P $'\t\t\t\t\t\t\t\"\d*\"\t\t\"(?!favorite)' /var/tmp/newconfig.vdf |\
     cut -d\" -f4 | sort -u
 }
-
-#######################################################################################
-#### Check if the config is valid                                                  ####
-#######################################################################################
-
 check_valid() {
   local BRACKETS PDB_PLAT NATIVECOUNT
   BRACKETS="$(tr -cd '{}' < "$1")"
@@ -451,11 +401,6 @@ check_valid() {
     fi
   fi
 }
-
-#######################################################################################
-#### Assemble Final Configurations                                                 ####
-#######################################################################################
-
 assemble_steam_config() {
   local apps_begin apps_end hidden is_hidden
   echo "Creating final configuration"
@@ -503,11 +448,6 @@ assemble_steam_config() {
   # Adding the bottom of the config
   tail -n+"$apps_end" "$1" >> /var/tmp/newconfig.vdf
 }
-
-#######################################################################################
-#### Help Output                                                                   ####
-#######################################################################################
-
 helpoutput() {
   echo "Steamy Cats is a script to categorize and organize Steam games
   Options include:
@@ -539,11 +479,6 @@ helpoutput() {
   Usage: --exclude-file=\$FILENAME
     Shell Variable: EXCLUDE_FILE"
 }
-
-#######################################################################################
-#### Find our config                                                               ####
-#######################################################################################
-
 find_config() {
   which_user() {
     local NAMES NUMNAMES line num
@@ -607,11 +542,6 @@ find_config() {
     echo "Currently set to: $WEBACCNUM"
   fi
 }
-
-#######################################################################################
-#### CLI switches                                                                  ####
-#######################################################################################
-
 parse_args() {
   local CLI_ARGS=("$@") cliarg
 
@@ -675,12 +605,25 @@ parse_args() {
     esac
   done
 }
-
-#######################################################################################
-#### Main Logic                                                                    ####
-#######################################################################################
-
 main() {
+  set -uEeo pipefail
+
+  renice 19 $$ > /dev/null
+
+  if ! type jq > /dev/null; then
+    echo Script requires jq to be installed; exit 1; fi
+  if ! type git > /dev/null; then
+    echo Script requires git to be installed; exit 1; fi
+
+  this_command="false"
+  previous_command="false"
+  trap 'previous_command=$this_command; this_command=$BASH_COMMAND' DEBUG
+  trap 'rm -rf "/var/tmp/Steamy_Cats/"' EXIT
+  trap '(echo "Exit Code: $? ~~ Last Command: $previous_command" ; exit 1)' ERR
+
+  rm -rf /var/tmp/Steamy_Cats/
+  mkdir -p /var/tmp/Steamy_Cats/fragments/ /var/tmp/Steamy_Cats/rewrites/
+
   parse_args "$@"
 
   local OUR_CONFIG="Not Found"
@@ -713,25 +656,12 @@ main() {
     cp "$OUR_CONFIG" "$OUR_CONFIG"~ || (echo "Preserve Original File Failed!" ; exit 1)
   fi
 
-  # Make config file sections for each game
-  # We also parse the current config and write it to those files
-  parse_config "$OUR_CONFIG" || (echo "Could not create new config fragments" ; exit 1)
-
-  # Download store pages for all the games
-  download_store || (echo "Could not download Steam Store info" ; exit 1)
-
-  # We download the ProtonDB info from github
-  download_proton_db || (echo "Could not download ProtonDB info" ; exit 1)
-
-  # This is where we parse the store pages and ProtonDB info and write it to our game files
-  make_categories || (echo "Failed to make new configs for games" ; exit 1)
-
-  # We take the original config and replace the "Apps" section with the one we just made
-  # This function takes the start of the config, our game files, and the end and combines it
-  assemble_steam_config "$OUR_CONFIG" || (echo "Failed to assemble our config" ; exit 1)
-
-  # Verify our config is valid
-  check_valid "/var/tmp/newconfig.vdf" "$OUR_CONFIG" || (echo "Config has invalid syntax!" ; exit 1)
+  parse_config "$OUR_CONFIG"
+  download_store
+  download_proton_db
+  make_categories
+  assemble_steam_config "$OUR_CONFIG"
+  check_valid "/var/tmp/newconfig.vdf" "$OUR_CONFIG"
 }
 
 main "$@"
