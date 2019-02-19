@@ -190,21 +190,22 @@ make_categories() {
     local pdb_mean pdb_mode
 
     # Mode
-    if ! grep -q "^$1," /var/tmp/Steamy_Cats/PDB.csv
+    if ! grep -q "\ $1," /var/tmp/Steamy_Cats/PDB.counted
     then
       printf "$line" "301" "PDB UNRATED" >> /var/tmp/Steamy_Cats/fragments/"$1"
       return
     else
-      pdb_mode="$(grep "^$1," /var/tmp/Steamy_Cats/PDB.csv | sort | uniq -c | sort -nr | head -n1 | cut -d, -f2)"
-      printf "$line" "301" "PDB MODE $pdb_mode" >> /var/tmp/Steamy_Cats/fragments/"$1"
+      pdb_mode="$(grep "\ $1," /var/tmp/Steamy_Cats/PDB.counted |\
+        head -n1 | cut -d, -f2)"
+      printf "$line" "301" "PDB MODE $pdb_mode" >>\
+        /var/tmp/Steamy_Cats/fragments/"$1"
     fi
-
     # Mean
-    pdb_mean="$(grep "^$1," /var/tmp/Steamy_Cats/PDB.csv |\
-      sed -e 's/Platinum/4/' -e 's/Gold/3/' -e 's/Silver/2/' -e 's/Bronze/1/' -e 's/Borked/0/' |\
-      awk -F "," '{n++;sum+=$2} END {print n? int((sum/n)+.5) :"Error"}' |\
-      sed -e 's/4/Platinum/' -e 's/3/Gold/' -e 's/2/Silver/' -e 's/1/Bronze/' -e 's/0/Borked/'
-    )" # I have a feeling this whole thing can be done in awk, so that is a todo
+    pdb_mean="$(grep "\ $1," /var/tmp/Steamy_Cats/PDB.counted |\
+      awk '{v[0]="Borked";v[1]="Bronze";v[2]="Silver";v[3]="Gold";v[4]="Platinum"}
+    /Borked/ { total+=$1 } /Bronze/ { total+=$1 ; sum+=($1*1) }
+    /Silver/ { total+=$1 ; sum+=($1*2) } /Gold/ { total+=$1 ; sum+=($1*3) }
+    /Platinum/ { total+=$1 ; sum+=($1*4)} END { print v[int((sum/total)+.5)] }')"
     printf "$line" "302" "PDB MEAN $pdb_mean" >> /var/tmp/Steamy_Cats/fragments/"$1"
   }
   finalize_fragments() {
@@ -307,13 +308,25 @@ make_categories() {
 
   echo "Adding new category tags to the games!"
   cd "$HOME"/.local/share/steam_store_frontend/ || oops "Downloads location does not exist, can't parse"
-  linux_native && pdb_if_not_linux
-  rel_date
-  reviews
-  flag_adult
-  user_tags
-  store_flags
-  finalize_fragments
+
+  linux_native || oops "Native labeling failed"
+  pdb_if_not_linux || oops "ProtonDB labeling failed"
+  rel_date || oops "Labeling release date failed"
+  reviews || oops "Labeling reviews failed"
+  flag_adult || oops "Adult only games failed to be labeled"
+  user_tags || oops "User made Steam tags failed"
+  store_flags || oops "Steam store flags failed"
+  finalize_fragments || oops "Our config did not finalize"
+}
+timer() {
+  if [ "$1" == "start" ]
+  then
+    time_start="$(date +"%s")"
+    return
+  fi
+
+  let cur_time=$(date +"%s")-$time_start
+  echo "$1 took $cur_time seconds"
 }
 download_proton_db() {
   local YEAR MONTH PDBLOC="$HOME/.local/share/protondb-data/" \
@@ -352,7 +365,11 @@ download_proton_db() {
   TAR_FILENAME=$(find . | grep "$YEAR" | grep "$MONTH")
   echo "Most recent ProtonDB file appears to be: $TAR_FILENAME"
   tar -zxvf "$TAR_FILENAME" > /dev/null || oops "Untarring the ProtonDB failed somehow"
-  jq -r '.[] | [.appId, .rating] | join(",")' "$PDBLOC"/reports/reports_piiremoved.json > /var/tmp/Steamy_Cats/PDB.csv
+
+  jq -r '.[] | [.appId, .rating] | join(",")' \
+    "$PDBLOC"/reports/reports_piiremoved.json |\
+    uniq -c | sort -nr > /var/tmp/Steamy_Cats/PDB.counted \
+    || oops Failed to make PDB.counted
 }
 category_list() {
   mkdir -p ~/.config/Steamy_Cats/
@@ -630,6 +647,8 @@ main() {
     sort -n | uniq -c | awk '{print  $1}')"
   native_count="$(grep APP\ NATIVE\ LINUX /var/tmp/newconfig.vdf |\
     sort -n | uniq -c | awk '{print  $1}')"
+
+  echo
   echo "PDB Platinum Ratings: $pdb_plat :: Native Games: $native_count"
   echo "Games not getting categories? In Steam, add to a group."
   echo "All games that have a group in Steam will be found by script"
