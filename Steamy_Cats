@@ -168,14 +168,14 @@ make_categories() {
     grep -f /var/tmp/Steamy_Cats/nolinux /var/tmp/Steamy_Cats/PDB.counted | \
       awk '{print $1 "," $2}' | awk -F',' 'BEGIN {v[0]="Borked";v[1]="Bronze";
       v[2]="Silver";v[3]="Gold";v[4]="Platinum"} { list[$2]=$2 }
-    /Borked/ { total[$2]+=$1 }
-    /Bronze/ { total[$2]+=$1 ; sum[$2]+=($1*1) }
-    /Silver/ { total[$2]+=$1 ; sum[$2]+=($1*2) }
-    /Gold/ { total[$2]+=$1 ; sum[$2]+=($1*3) }
-    /Platinum/ { total[$2]+=$1 ; sum[$2]+=($1*4)}
-    END { for(game in list)
-    printf "\t\t\t\t\t\t\t\"302\"\t\t\"PDB MEAN %s\"\n",
-    v[int((sum[game]/total[game])+.5)] >> "/var/tmp/Steamy_Cats/fragments/"game }'
+      /Borked/ { total[$2]+=$1 }
+      /Bronze/ { total[$2]+=$1 ; sum[$2]+=($1*1) }
+      /Silver/ { total[$2]+=$1 ; sum[$2]+=($1*2) }
+      /Gold/ { total[$2]+=$1 ; sum[$2]+=($1*3) }
+      /Platinum/ { total[$2]+=$1 ; sum[$2]+=($1*4)}
+      END { for(game in list)
+      printf "\t\t\t\t\t\t\t\"302\"\t\t\"PDB MEAN %s\"\n",
+      v[int((sum[game]/total[game])+.5)] >> "/var/tmp/Steamy_Cats/fragments/"game }'
   }
   finalize_fragments() {
     local all_checked game_needs_all which_game
@@ -223,7 +223,9 @@ make_categories() {
       if [ -f /var/tmp/Steamy_Cats/fragments/"$which_game" ] ; then
         printf "$line" "350" "REVIEW $rev_score" >> /var/tmp/Steamy_Cats/fragments/"$which_game"
       fi
-    done <<< "$(grep -HA1 "Overall Reviews:" -- * | grep "game_review_summary" | grep -v "Need more user reviews" | sed 's/\..*\">/~/' | cut -d\< -f1)"
+    done <<< "$(grep -HA1 "Overall Reviews:" -- * |\
+      grep "game_review_summary" | grep -v "Need more user reviews" |\
+      sed 's/\..*\">/~/' | cut -d\< -f1)"
   }
   flag_adult() {
     local which_game
@@ -392,10 +394,13 @@ assemble_steam_config() {
 
   if [ -f "$INCLUDE_FILE" ] ; then
     # We are going to get a diff of what we have and what we want, then get rid of the difference
-    grep -P $'\t\t\t\t\t\t\t\"\d*\"\t\t\"(?!favorite)' /var/tmp/Steamy_Cats/hidden_managed | cut -d\" -f4 | sort -u > /var/tmp/Steamy_Cats/List
+    grep -P $'\t\t\t\t\t\t\t\"\d*\"\t\t\"(?!favorite)' \
+      /var/tmp/Steamy_Cats/hidden_managed |\
+      cut -d\" -f4 | sort -u > /var/tmp/Steamy_Cats/List
     grep -v "^#" "$INCLUDE_FILE" > /var/tmp/Steamy_Cats/Includes
     grep -hvf /var/tmp/Steamy_Cats/Includes /var/tmp/Steamy_Cats/List > /var/tmp/Steamy_Cats/Diff
-    grep -vhf /var/tmp/Steamy_Cats/Diff /var/tmp/Steamy_Cats/hidden_managed > /var/tmp/Steamy_Cats/tempconfig.vdf
+    grep -vhf /var/tmp/Steamy_Cats/Diff \
+      /var/tmp/Steamy_Cats/hidden_managed > /var/tmp/Steamy_Cats/tempconfig.vdf
   else
     cat /var/tmp/Steamy_Cats/hidden_managed > /var/tmp/Steamy_Cats/tempconfig.vdf
   fi
