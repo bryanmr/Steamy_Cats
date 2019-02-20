@@ -175,7 +175,6 @@ make_categories() {
   finalize_fragments() {
     local all_checked game_needs_all which_game
     cd /var/tmp/Steamy_Cats/fragments/ || oops "Our fragment location is missing"
-    #      echo "~FAILED~" > "$HOME/.local/share/steam_store_frontend/$1.html"
 
     # Writing the ALL group where it is missing
     all_checked="$(grep -L '"ALL"' -- *)"
@@ -295,8 +294,7 @@ make_categories() {
   finalize_fragments || oops "Our config did not finalize"
 }
 timer() {
-  if [ "$1" == "start" ]
-  then
+  if [ "$1" == "start" ] ; then
     time_start="$(date +"%s")"
     return
   fi
@@ -355,8 +353,7 @@ check_valid() {
   brackets="$(tr -cd '{}' < "$1" | sed ':loop;s/{}//g;t loop')"
   quotes="$(tr -cd '"' < "$1" | sed 's/""//g')"
 
-  if [ "$brackets" != "" ] || [ "$quotes" != "" ]
-  then
+  if [ "$brackets" != "" ] || [ "$quotes" != "" ] ; then
     echo "The configuration has some errors."
     echo "Here are your unmatched brackets: $brackets"
     echo "Here are your unmatched quotes: $quotes"
