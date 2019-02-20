@@ -20,8 +20,7 @@ EXCLUDE_FILE="$HOME/.config/Steamy_Cats/exclude.conf"
 parse_config() {
   community_profile() {
     local appid games_list
-    if [ "$COMM_DOWNLOAD" == "false" ]
-    then
+    if [ "$COMM_DOWNLOAD" == "false" ] ; then
       echo "Downloading your community profile, if public, and then getting full list of games you own"
       curl -sLo /var/tmp/Steamy_Cats/Community_Profile \
         "https://steamcommunity.com/profiles/$WEBACCNUM/games/?tab=all" ||\
@@ -34,16 +33,14 @@ parse_config() {
     # Find the JSON containing our games, then extract the APP ID with JQ
     games_list="$(grep "var rgGames" /var/tmp/Steamy_Cats/Community_Profile | \
       sed -e 's/var rgGames \= \[//' -e 's/\]\;//' -e 's/\,[{]/\n\{/g' | jq '.appid' | grep '[0-9]')"
-    if [ "$games_list" == "" ]
-    then
+    if [ "$games_list" == "" ] ; then
       tput bold
       echo "Is your community profile private? Check in a private browser: https://steamcommunity.com/profiles/$WEBACCNUM/games/?tab=all"
       echo "You can download the file manually and run the script with --comm-html=/path/to/file"
       echo "Alternatively, you can add all games to a group so they show up in your local configuration"
       tput sgr0
     else
-      while read -r appid
-      do
+      while read -r appid ; do
         {
           printf "\t\t\t\t\t\"%s\"\n" "$appid"
           printf "\t\t\t\t\t{\n"
@@ -100,87 +97,63 @@ parse_config() {
   fi
 }
 download_store() {
-  local DLOC="$HOME/.local/share/steam_store_frontend/" \
-  TLOC="https://store.steampowered.com/app/" \
-  NUMEXISTS=0 DOWNLOADING=0 DL_LIST="" DOWNLOADED=0 \
-  DL_COUNT SLEEP_NOW i
+  local dloc="$HOME/.local/share/steam_store_frontend/" \
+    total_to_dl=0 dl_list="" downloaded=0 i
 
   cleandls() {
-    cd "$DLOC" || oops "Download location does not exist."
-    if [ ! "$(ls -A)" ]; then return ; fi
+    cd "$dloc" || oops "Download location does not exist."
 
-    if grep -q '>Error<' -- *
-    then
-      echo "Some files had errors. Deleting"
-      set -x
-      grep -Zl '>Error<' -- * | xargs --null rm
-      set +x
-      echo "Done deleting files."
-    fi
+    if [ ! "$(ls -A)" ] ; then return ; fi
 
-    # Files from being rate limited should be deleted
-    if grep -q '>Access Denied<' -- *
-    then
-      echo "API rate limit hit? Deleting some files."
-      set -x
-      grep -Zl '>Access Denied<' -- * | xargs --null rm
-      set +x
-      echo "Done deleting files."
+    if grep -q -e '>Error<' -e '>Access Denied<' -- * ; then
+      echo "Some files had errors. Deleting. Not retrying downloads."
+      grep -Zl -e '>Error<' -e '>Access Denied<' -- * | xargs --null rm
     fi
   }
 
-  mkdir -p "$DLOC"
+  mkdir -p "$HOME/.local/share/steam_store_frontend/"
   cleandls
 
   # We gather the list of files to be downloaded
   cd /var/tmp/Steamy_Cats/fragments || oops "Our fragment location is missing"
   for i in *
   do 
-    if [ ! -e "$DLOC""$i".html ]
-    then
-      DL_LIST="$DL_LIST $i"
-      let DOWNLOADING=$DOWNLOADING+1
-    else
-      let NUMEXISTS=$NUMEXISTS+1
+    if [ ! -e "$dloc""$i".html ] ; then
+      dl_list="$dl_list $i"
+      let total_to_dl++
     fi
   done
 
-  if [ "$(wc -w <<< "$DL_LIST")" -lt 1 ]
-  then
-    echo "All downloads completed already. Check $DLOC if something is wrong."
+  if [ "$(wc -w <<< "$dl_list")" -lt 1 ] ; then
+    echo "All downloads completed already. Check $dloc if something is wrong."
   else
-    if [ "$(wc -w <<< "$DL_LIST")" -gt 25 ]
-    then
-      echo "Downloading $(wc -w <<< "$DL_LIST") files" && echo
+    if [ "$(wc -w <<< "$dl_list")" -gt 25 ] ; then
+      echo "Downloading $(wc -w <<< "$dl_list") files" && echo
     else
-      echo "Downloading files for these game IDs: $DL_LIST" && echo
+      echo "Downloading files for these game IDs: $dl_list" && echo
     fi
 
-    for i in $DL_LIST
-    do
-      let DOWNLOADED=$DOWNLOADED+1
-
+    for i in $dl_list ; do
       # We check to see if we have 10 downloads going here
       # This is due to Steam rate limiting our downloads
-      let SLEEP_NOW=$DOWNLOADED%10
-      if [[ $SLEEP_NOW -eq 0 ]]
-      then
-        let DL_COUNT=$DOWNLOADED-1
+      let downloaded++
+      if [[ $downloaded%10 -eq 0 ]] ; then
         tput cuu 1 && tput el # Using this to overwrite previous line
-        echo "SLEEPING (DL RATE LIMIT) $DL_COUNT downloads started of $DOWNLOADING total"
-        wait
+        echo "SLEEPING (DL RATE LIMIT) $downloaded downloads started of $total_to_dl total"
         sleep 1
+        wait
       fi
 
-      curl -L --cookie "mature_content=1 ; birthtime=-729000000" -s -o "$DLOC""$i".html "$TLOC$i" &
+      curl --cookie "mature_content=1 ; birthtime=-729000000" \
+        -sLo "$dloc$i.html" "https://store.steampowered.com/app/$i" &
       tput cuu 1 && tput el # Using this to overwrite previous line
-      echo "$DOWNLOADED downloads started of $DOWNLOADING total"
+      echo "$downloaded downloads started of $total_to_dl total"
     done
 
     wait
 
     cleandls
-    echo "Downloads complete for the Store Frontend."
+    echo "Downloads completed for the Steam Store."
   fi
 }
 make_categories() {
@@ -332,11 +305,11 @@ timer() {
   echo "$1 took $cur_time seconds"
 }
 download_proton_db() {
-  local YEAR MONTH PDBLOC="$HOME/.local/share/protondb-data/" \
-    TAR_FILENAME
+  local year month pdbloc="$HOME/.local/share/protondb-data/" \
+    tar_filename
 
   check_pdb() {
-    if [ ! -d "$PDBLOC" ]
+    if [ ! -d "$pdbloc" ]
     then
       cd "$HOME"/.local/share/ || oops ".local/share does not exist, exiting"
       echo "Downloading Proton DB Info using Git"
@@ -345,32 +318,32 @@ download_proton_db() {
     fi
   }
 
-  rm -f "$PDBLOC"/reports/reports_piiremoved.json
+  rm -f "$pdbloc"/reports/reports_piiremoved.json
 
   check_pdb
-  cd "$PDBLOC"/reports || oops "Proton DB download does not exit, error"
+  cd "$pdbloc"/reports || oops "Proton DB download does not exit, error"
 
-  YEAR=$(find . | cut -d_ -f3 | sort -ru | head -n1)
-  MONTH=$(find . | grep "$YEAR" | cut -d_ -f2 | sort -Mr | head -n1 | cut -b1-3)
+  year=$(find . | cut -d_ -f3 | sort -ru | head -n1)
+  month=$(find . | grep "$year" | cut -d_ -f2 | sort -Mr | head -n1 | cut -b1-3)
 
   # If there is a new Proton DB, we should try to get it
-  if [ "$MONTH" != "$(date +%b | tr '[:upper:]' '[:lower:]')" ]
+  if [ "$month" != "$(date +%b | tr '[:upper:]' '[:lower:]')" ]
   then
     cd ../.. || oops "Failed to move up directories"
-    rm -rf "$PDBLOC"
+    rm -rf "$pdbloc"
     check_pdb
 
-    cd "$PDBLOC"/reports || oops "Reports folder does not exist for ProtonDB"
-    YEAR=$(find . | cut -d_ -f3 | sort -ru | head -n1)
-    MONTH=$(find . | grep "$YEAR" | cut -d_ -f2 | sort -Mr | head -n1)
+    cd "$pdbloc"/reports || oops "Reports folder does not exist for ProtonDB"
+    year=$(find . | cut -d_ -f3 | sort -ru | head -n1)
+    month=$(find . | grep "$year" | cut -d_ -f2 | sort -Mr | head -n1)
   fi
 
-  TAR_FILENAME=$(find . | grep "$YEAR" | grep "$MONTH")
-  echo "Most recent ProtonDB file appears to be: $TAR_FILENAME"
-  tar -zxvf "$TAR_FILENAME" > /dev/null || oops "Untarring the ProtonDB failed somehow"
+  tar_filename=$(find . | grep "$year" | grep "$month")
+  echo "Most recent ProtonDB file appears to be: $tar_filename"
+  tar -zxvf "$tar_filename" > /dev/null || oops "Untarring the ProtonDB failed somehow"
 
   jq -r '.[] | [.appId, .rating] | join(",")' \
-    "$PDBLOC"/reports/reports_piiremoved.json | sort |\
+    "$pdbloc"/reports/reports_piiremoved.json | sort |\
     uniq -c | sort -nr > /var/tmp/Steamy_Cats/PDB.counted \
     || oops Failed to make PDB.counted
 }
@@ -421,8 +394,7 @@ assemble_steam_config() {
   # Attaching the top of the config
   head -n"$apps_begin" "$1" > /var/tmp/newconfig.vdf
 
-  if [ -f "$INCLUDE_FILE" ]
-  then
+  if [ -f "$INCLUDE_FILE" ] ; then
     # We are going to get a diff of what we have and what we want, then get rid of the difference
     grep -P $'\t\t\t\t\t\t\t\"\d*\"\t\t\"(?!favorite)' /var/tmp/Steamy_Cats/hidden_managed | cut -d\" -f4 | sort -u > /var/tmp/Steamy_Cats/List
     grep -v "^#" "$INCLUDE_FILE" > /var/tmp/Steamy_Cats/Includes
@@ -432,8 +404,7 @@ assemble_steam_config() {
     cat /var/tmp/Steamy_Cats/hidden_managed > /var/tmp/Steamy_Cats/tempconfig.vdf
   fi
 
-  if [ -f "$EXCLUDE_FILE" ]
-  then
+  if [ -f "$EXCLUDE_FILE" ] ; then
     grep -v "^#" "$EXCLUDE_FILE" > /var/tmp/Steamy_Cats/Excludes
     grep -hvf /var/tmp/Steamy_Cats/Excludes /var/tmp/Steamy_Cats/tempconfig.vdf >> /var/tmp/newconfig.vdf
   else
@@ -542,8 +513,7 @@ find_config() {
 parse_args() {
   local CLI_ARGS=("$@") cliarg
 
-  for cliarg in "${CLI_ARGS[@]}"
-  do
+  for cliarg in "${CLI_ARGS[@]}" ; do
     case "$cliarg" in
       "--debug")
         set -x
