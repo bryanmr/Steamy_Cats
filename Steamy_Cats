@@ -186,24 +186,18 @@ download_store() {
 make_categories() {
   local line="\t\t\t\t\t\t\t\"%s\"\t\t\"%s\"\n"
 
-  write_proton_db_scores() {
-    local pdb_mean
-
-    # Mode
-    if ! grep -q "\ $1," /var/tmp/Steamy_Cats/PDB.counted
-    then
-      printf "$line" "301" "PDB UNRATED" >> /var/tmp/Steamy_Cats/fragments/"$1"
-      return
-    fi
-
-    # Mean
-    pdb_mean="$(grep "\ $1," /var/tmp/Steamy_Cats/PDB.counted |\
-      awk 'BEGIN {v[0]="Borked";v[1]="Bronze";
-      v[2]="Silver";v[3]="Gold";v[4]="Platinum"}
-    /Borked/ { total+=$1 } /Bronze/ { total+=$1 ; sum+=($1*1) }
-    /Silver/ { total+=$1 ; sum+=($1*2) } /Gold/ { total+=$1 ; sum+=($1*3) }
-    /Platinum/ { total+=$1 ; sum+=($1*4)} END { print v[int((sum/total)+.5)] }')"
-    printf "$line" "302" "PDB MEAN $pdb_mean" >> /var/tmp/Steamy_Cats/fragments/"$1"
+  pdb_mean() {
+    grep -f /var/tmp/Steamy_Cats/nolinux /var/tmp/Steamy_Cats/PDB.counted | \
+      awk '{print $1 "," $2}' | awk -F',' 'BEGIN {v[0]="Borked";v[1]="Bronze";
+      v[2]="Silver";v[3]="Gold";v[4]="Platinum"} { list[$2]=$2 }
+    /Borked/ { total[$2]+=$1 }
+    /Bronze/ { total[$2]+=$1 ; sum[$2]+=($1*1) }
+    /Silver/ { total[$2]+=$1 ; sum[$2]+=($1*2) }
+    /Gold/ { total[$2]+=$1 ; sum[$2]+=($1*3) }
+    /Platinum/ { total[$2]+=$1 ; sum[$2]+=($1*4)}
+    END { for(game in list)
+    printf "\t\t\t\t\t\t\t\"302\"\t\t\"PDB MEAN %s\"\n",
+    v[int((sum[game]/total[game])+.5)] >> "/var/tmp/Steamy_Cats/fragments/"game }'
   }
   finalize_fragments() {
     local all_checked game_needs_all which_game
@@ -237,13 +231,6 @@ make_categories() {
         printf "$line" "301" "APP NATIVE LINUX" >> /var/tmp/Steamy_Cats/fragments/"$which_game"
       fi
     done <<< "$(sort -u /var/tmp/Steamy_Cats/Linux)"
-  }
-  pdb_if_not_linux() {
-    local which_game
-    while read -r which_game ; do
-      write_proton_db_scores "$which_game" || oops "ProtonDB score failed" &
-    done <<< "$(cd /var/tmp/Steamy_Cats/fragments/ && grep -L LINUX -- *)"
-    wait
   }
   rel_date() {
     local which_game rel_year
@@ -303,7 +290,7 @@ make_categories() {
       awk 'length' | sed 's/,$//')"
   }
   pdb_mode() {
-    grep -L LINUX /var/tmp/Steamy_Cats/fragments/* |\
+    grep -L LINUX -- /var/tmp/Steamy_Cats/fragments/* |\
       grep -oP '[0-9]+$' | sed -e 's/$/,/' -e 's/^/ /' \
       > /var/tmp/Steamy_Cats/nolinux
     grep -f /var/tmp/Steamy_Cats/nolinux /var/tmp/Steamy_Cats/PDB.counted |\
@@ -311,13 +298,22 @@ make_categories() {
       '!seen[$1] {printf "\t\t\t\t\t\t\t\"301\"\t\t\"PDB MODE %s\"\n",
       $2 >> "/var/tmp/Steamy_Cats/fragments/"$1;seen[$1]=1}'
   }
+  pdb_unrated() {
+    local which_game
+
+    while read -r which_game ; do
+      printf "$line" "301" "PDB UNRATED" >> "$which_game"
+    done <<< "$(grep -L -e LINUX -e PDB /var/tmp/Steamy_Cats/fragments/*)"
+  }
 
   echo "Adding new category tags to the games!"
-  cd "$HOME"/.local/share/steam_store_frontend/ || oops "Downloads location does not exist, can't parse"
+  cd "$HOME"/.local/share/steam_store_frontend/ ||\
+    oops "Downloads location does not exist, can't parse"
 
   linux_native || oops "Native labeling failed"
   pdb_mode || oops "Writing the most frequent PDB score failed"
-  pdb_if_not_linux || oops "ProtonDB labeling failed"
+  pdb_mean || oops "Writing ProtonDB average failed"
+  pdb_unrated || oops "Failed to find unrated ProtonDB entries"
   rel_date || oops "Labeling release date failed"
   reviews || oops "Labeling reviews failed"
   flag_adult || oops "Adult only games failed to be labeled"
