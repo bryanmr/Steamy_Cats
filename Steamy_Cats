@@ -305,12 +305,10 @@ timer() {
   echo "$1 took $cur_time seconds"
 }
 download_proton_db() {
-  local year month pdbloc="$HOME/.local/share/protondb-data/" \
-    tar_filename
+  local tar_filename pdbloc="$HOME/.local/share/protondb-data/"
 
   check_pdb() {
-    if [ ! -d "$pdbloc" ]
-    then
+    if [ ! -d "$pdbloc" ] ; then
       cd "$HOME"/.local/share/ || oops ".local/share does not exist, exiting"
       echo "Downloading Proton DB Info using Git"
       git clone https://github.com/bdefore/protondb-data.git &> /dev/null ||\
@@ -323,22 +321,18 @@ download_proton_db() {
   check_pdb
   cd "$pdbloc"/reports || oops "Proton DB download does not exit, error"
 
-  year=$(find . | cut -d_ -f3 | sort -ru | head -n1)
-  month=$(find . | grep "$year" | cut -d_ -f2 | sort -Mr | head -n1 | cut -b1-3)
-
   # If there is a new Proton DB, we should try to get it
-  if [ "$month" != "$(date +%b | tr '[:upper:]' '[:lower:]')" ]
-  then
-    cd ../.. || oops "Failed to move up directories"
+  if ! find . -name "*.tar.gz" |\
+    grep "$(date +"%Y")" | grep -i "$(date +"%b")" > /dev/null; then
+    echo "Attempting to update ProtonDB files"
+    cd "$HOME"/.local/share/ || oops "Failed to move up directories"
     rm -rf "$pdbloc"
     check_pdb
 
     cd "$pdbloc"/reports || oops "Reports folder does not exist for ProtonDB"
-    year=$(find . | cut -d_ -f3 | sort -ru | head -n1)
-    month=$(find . | grep "$year" | cut -d_ -f2 | sort -Mr | head -n1)
   fi
 
-  tar_filename=$(find . | grep "$year" | grep "$month")
+  tar_filename=$(find . -name "*tar.gz" | grep "$(date +"%Y")" | sort -t_ -k2 -Mr | head -n1)
   echo "Most recent ProtonDB file appears to be: $tar_filename"
   tar -zxvf "$tar_filename" > /dev/null || oops "Untarring the ProtonDB failed somehow"
 
