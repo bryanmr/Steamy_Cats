@@ -187,19 +187,15 @@ make_categories() {
   local line="\t\t\t\t\t\t\t\"%s\"\t\t\"%s\"\n"
 
   write_proton_db_scores() {
-    local pdb_mean pdb_mode
+    local pdb_mean
 
     # Mode
     if ! grep -q "\ $1," /var/tmp/Steamy_Cats/PDB.counted
     then
       printf "$line" "301" "PDB UNRATED" >> /var/tmp/Steamy_Cats/fragments/"$1"
       return
-    else
-      pdb_mode="$(grep "\ $1," /var/tmp/Steamy_Cats/PDB.counted |\
-        head -n1 | cut -d, -f2)"
-      printf "$line" "301" "PDB MODE $pdb_mode" >>\
-        /var/tmp/Steamy_Cats/fragments/"$1"
     fi
+
     # Mean
     pdb_mean="$(grep "\ $1," /var/tmp/Steamy_Cats/PDB.counted |\
       awk 'BEGIN {v[0]="Borked";v[1]="Bronze";
@@ -306,11 +302,21 @@ make_categories() {
       cut -d\> -f2 | tr '\n' ',' | sed -E 's/([0-9]+)/\n\1/g' |\
       awk 'length' | sed 's/,$//')"
   }
+  pdb_mode() {
+    grep -L LINUX /var/tmp/Steamy_Cats/fragments/* |\
+      grep -oP '[0-9]+$' | sed -e 's/$/,/' -e 's/^/ /' \
+      > /var/tmp/Steamy_Cats/nolinux
+    grep -f /var/tmp/Steamy_Cats/nolinux /var/tmp/Steamy_Cats/PDB.counted |\
+      awk '{print $2}' | awk -F',' \
+      '!seen[$1] {printf "\t\t\t\t\t\t\t\"301\"\t\t\"PDB MODE %s\"\n",
+      $2 >> "/var/tmp/Steamy_Cats/fragments/"$1;seen[$1]=1}'
+  }
 
   echo "Adding new category tags to the games!"
   cd "$HOME"/.local/share/steam_store_frontend/ || oops "Downloads location does not exist, can't parse"
 
   linux_native || oops "Native labeling failed"
+  pdb_mode || oops "Writing the most frequent PDB score failed"
   pdb_if_not_linux || oops "ProtonDB labeling failed"
   rel_date || oops "Labeling release date failed"
   reviews || oops "Labeling reviews failed"
@@ -368,7 +374,7 @@ download_proton_db() {
   tar -zxvf "$TAR_FILENAME" > /dev/null || oops "Untarring the ProtonDB failed somehow"
 
   jq -r '.[] | [.appId, .rating] | join(",")' \
-    "$PDBLOC"/reports/reports_piiremoved.json |\
+    "$PDBLOC"/reports/reports_piiremoved.json | sort |\
     uniq -c | sort -nr > /var/tmp/Steamy_Cats/PDB.counted \
     || oops Failed to make PDB.counted
 }
@@ -547,6 +553,9 @@ parse_args() {
         set -x
         trap 'echo "Script Exited, files not cleaned up"' EXIT
         ;;
+      "--save-files")
+        trap 'echo "Script Exited, files not cleaned up"' EXIT
+        ;;
       "--profiler")
         set -x
         PS4='+ $(date "+%s.%N ($LINENO) ")'
@@ -601,8 +610,8 @@ parse_args() {
   done
 }
 oops() {
-  tput bold
   echo "Exit Code: $? ~~ Last Command: $this_command"
+  tput bold
   echo "$@"
   tput sgr0
   exit 1
