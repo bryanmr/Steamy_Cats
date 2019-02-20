@@ -21,7 +21,7 @@ parse_config() {
   community_profile() {
     local appid games_list
     if [ "$COMM_DOWNLOAD" == "false" ] ; then
-      echo "Downloading your community profile, if public, and then getting full list of games you own"
+      echo "Downloading your community profile, if public"
       curl -sLo /var/tmp/Steamy_Cats/Community_Profile \
         "https://steamcommunity.com/profiles/$WEBACCNUM/games/?tab=all" ||\
         oops "Failed to download community profile"
@@ -32,12 +32,13 @@ parse_config() {
 
     # Find the JSON containing our games, then extract the APP ID with JQ
     games_list="$(grep "var rgGames" /var/tmp/Steamy_Cats/Community_Profile | \
-      sed -e 's/var rgGames \= \[//' -e 's/\]\;//' -e 's/\,[{]/\n\{/g' | jq '.appid' | grep '[0-9]')"
+      sed -e 's/var rgGames \= \[//' -e 's/\]\;//' -e 's/\,[{]/\n\{/g' |\
+      jq '.appid' | grep '[0-9]')"
     if [ "$games_list" == "" ] ; then
       tput bold
-      echo "Is your community profile private? Check in a private browser: https://steamcommunity.com/profiles/$WEBACCNUM/games/?tab=all"
-      echo "You can download the file manually and run the script with --comm-html=/path/to/file"
-      echo "Alternatively, you can add all games to a group so they show up in your local configuration"
+      echo "Is your community profile private? Check in a private browser."
+      echo "https://steamcommunity.com/profiles/$WEBACCNUM/games/?tab=all"
+      echo "Run --help and see --comm-html=/path/to/file for workaround"
       tput sgr0
     else
       while read -r appid ; do
@@ -69,18 +70,22 @@ parse_config() {
       /^\t\t\t\t"Apps"$/{f=1;next}
       f&&/^\t\t\t\t\t"[0-9]+"$/{n=1;print;next}
       n&&/^\t\t\t\t}$/{n=0;f=0} ; n' "$1" |\
-        grep -v -e '"TAGS ' -e '"SFLAGS ' -e '"APP ' -e '"PDB ' -e '"RELEASE ' -e '"REVIEW ')
+        grep -v -e '"TAGS ' -e '"SFLAGS ' \
+        -e '"APP ' -e '"PDB ' -e '"RELEASE ' -e '"REVIEW ')
     fi
 
-    awk '/^\t\t\t\t\t"[0-9]+"$/ {split($0,a,"\"");print > "/var/tmp/Steamy_Cats/fragments/"a[2];next}
+    awk '/^\t\t\t\t\t"[0-9]+"$/ {split($0,a,"\"");
+    print > "/var/tmp/Steamy_Cats/fragments/"a[2];next}
     {print >> "/var/tmp/Steamy_Cats/fragments/"a[2]}' <<< "$apps_section"
 
     check_tags="$(cd /var/tmp/Steamy_Cats/fragments/ &&\
       grep -L $'\t\t\t\t\t\"tags\"' -- *)"
     if [ "$check_tags" != "" ] ; then
       while read -r tags_missing ; do
-        printf "\t\t\t\t\t\t\"tags\"\n" >> /var/tmp/Steamy_Cats/fragments/"$tags_missing"
-        printf "\t\t\t\t\t\t{\n" >> /var/tmp/Steamy_Cats/fragments/"$tags_missing"
+        {
+          printf "\t\t\t\t\t\t\"tags\"\n"
+          printf "\t\t\t\t\t\t{\n"
+        } >> /var/tmp/Steamy_Cats/fragments/"$tags_missing"
       done <<< "$check_tags"
     fi
 
@@ -139,7 +144,7 @@ download_store() {
       let downloaded++
       if [[ $downloaded%10 -eq 0 ]] ; then
         tput cuu 1 && tput el # Using this to overwrite previous line
-        echo "SLEEPING (DL RATE LIMIT) $downloaded downloads started of $total_to_dl total"
+        echo "DL RATE LIMIT $downloaded downloads started of $total_to_dl total"
         sleep 1
         wait
       fi
@@ -409,15 +414,15 @@ helpoutput() {
   echo "Steamy Cats is a script to categorize and organize Steam games
   Options include:
   --debug : Turn on lots of things to exit on error and show commands being ran
-  You should also consider --sequential with --debug for more meaningful output
+  --save-files : Don't delete the temp files after script exits
   --profiler : Prepends timestamp and shows all commands ran
   Intended to be redirected to file for profiling of code
-  --ignore-old-categories : Gets rid of all category configuration while retaining favorites
+  --ignore-old-categories : Gets rid of config while retaining favorites
     Shell Variable: WIPE_CONFIG
   --clear-whole-config : Preserves nothing from old configuration
     Shell Variable: FRESH_CONFIG
   --category-list : Returns the list of categories available
-  --vdf-file : Name of a VDF configuration to use instead of the script discovered one
+  --vdf-file : Name of a VDF configuration to use, skipping discovery
   Usage: --vdf-file=/path/to/file.vdf
     Shell Variable: USER_VDF
   --steam-user-id : The numeric USER ID for your Steam account
@@ -426,13 +431,13 @@ helpoutput() {
   --comm-html : Download your own community page instead of making it public
   Usage: --comm-html=/path/to/steamcommunity.html
     Shell Variable: COMM_DOWNLOAD
-  --user : User number to execute the script with, instead of inputting after running
+  --user : Number you type after script prompts
   Usage: --user=\$USERNUM
     Shell Variable: USERNUM
-  --include-file : Location of the file containing a list of categories to include
+  --include-file : Location of a file with a list of categories to include
   Usage: --include-file=\$FILENAME
     Shell Variable: INCLUDE_FILE
-  --exclude-file : Location of the file containing a list of categories to exclude
+  --exclude-file : Location of a file with a list of categories to exclude
   Usage: --exclude-file=\$FILENAME
     Shell Variable: EXCLUDE_FILE"
 }
