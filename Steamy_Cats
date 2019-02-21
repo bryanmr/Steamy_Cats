@@ -17,7 +17,7 @@ EXCLUDE_FILE="$HOME/.config/Steamy_Cats/exclude.conf"
 #### Start Script (No variables below here)                       ####
 ######################################################################
 
-parse_config() {
+parse_config() { # Produces /var/tmp/Steamy_Cats/fragments/
   community_profile() {
     local appid games_list
     if [ "$COMM_DOWNLOAD" == "false" ] ; then
@@ -101,7 +101,7 @@ parse_config() {
     copy_config "$@" || oops "Failed to copy old configuration"
   fi
 }
-download_store() {
+download_store() { # Downloads store pages to steam_store_frontend
   local dloc="$HOME/.local/share/steam_store_frontend/" \
     total_to_dl=0 dl_list="" downloaded=0 i
 
@@ -161,10 +161,10 @@ download_store() {
     echo "Downloads completed for the Steam Store."
   fi
 }
-make_categories() {
+make_categories() { # Writes tags to fragments directory
   local line="\t\t\t\t\t\t\t\"%s\"\t\t\"%s\"\n"
 
-  pdb_mean() {
+  pdb_mean() { # Calculates ProtonDB mean scores
     grep -f /var/tmp/Steamy_Cats/nolinux /var/tmp/Steamy_Cats/PDB.counted | \
       awk '{print $1 "," $2}' | awk -F',' 'BEGIN {v[0]="Borked";v[1]="Bronze";
       v[2]="Silver";v[3]="Gold";v[4]="Platinum"} { list[$2]=$2 }
@@ -177,7 +177,7 @@ make_categories() {
       printf "\t\t\t\t\t\t\t\"302\"\t\t\"PDB MEAN %s\"\n",
       v[int((sum[game]/total[game])+.5)] >> "/var/tmp/Steamy_Cats/fragments/"game }'
   }
-  finalize_fragments() {
+  finalize_fragments() { # Adds closing bracket and ALL group
     local all_checked game_needs_all which_game
     cd /var/tmp/Steamy_Cats/fragments/ || oops "Our fragment location is missing"
 
@@ -195,7 +195,7 @@ make_categories() {
       printf "\t\t\t\t\t}\n" >> /var/tmp/Steamy_Cats/fragments/"$which_game"
     done
   }
-  linux_native() {
+  linux_native() { # Checks if game is native to Linux
     local which_game
     grep -Hl 'data-os="linux">' -- * | cut -d. -f1 > /var/tmp/Steamy_Cats/Linux
     grep -m1 -H '<div class="game_area_purchase_platform">' -- * |\
@@ -209,7 +209,7 @@ make_categories() {
       fi
     done <<< "$(sort -u /var/tmp/Steamy_Cats/Linux)"
   }
-  rel_date() {
+  rel_date() { # Adds release date to fragments
     local which_game rel_year
     while IFS="." read -r which_game rel_year ; do
       if [ -f /var/tmp/Steamy_Cats/fragments/"$which_game" ] ; then
@@ -217,7 +217,7 @@ make_categories() {
       fi
     done <<< "$(grep -H "<b>Release Date:" -- * | sed -nr 's/([0-9]*\.).*([0-9]{4}).*/\1\2/p')"
   }
-  reviews() {
+  reviews() { # Adds reviews to fragments
     local which_game rev_score
     while IFS="~" read -r which_game rev_score ; do
       if [ -f /var/tmp/Steamy_Cats/fragments/"$which_game" ] ; then
@@ -227,7 +227,7 @@ make_categories() {
       grep "game_review_summary" | grep -v "Need more user reviews" |\
       sed 's/\..*\">/~/' | cut -d\< -f1)"
   }
-  flag_adult() {
+  flag_adult() { # Adds if games are adult only
     local which_game
     while read -r which_game ; do
       if [ -f /var/tmp/Steamy_Cats/fragments/"$which_game" ] ; then
@@ -235,7 +235,7 @@ make_categories() {
       fi
     done <<< "$(grep -l "You must login to see this content." -- *.html | cut -d. -f1)"
   }
-  user_tags() {
+  user_tags() { # Adds user created tags from the store page
     local values countnum val
     while IFS="," read -ra values ; do
       if [ ! -f /var/tmp/Steamy_Cats/fragments/"${values[0]}" ] ; then
@@ -251,7 +251,7 @@ make_categories() {
       sed -E -e 's/\],/]}/' -e 's/\.html://' -e 's/([0-9]+)/{"\1":/' |\
       jq -cr 'keys[] as $keys | .[] | [$keys, .[].name] | join(",")')"
   }
-  store_flags() {
+  store_flags() { # Adds Steam store flags from store page
     local values countnum val
     while IFS="," read -ra values ; do
       if [ ! -f /var/tmp/Steamy_Cats/fragments/"${values[0]}" ] ; then
@@ -268,7 +268,7 @@ make_categories() {
       cut -d\> -f2 | tr '\n' ',' | sed -E 's/([0-9]+)/\n\1/g' |\
       awk 'length' | sed 's/,$//')"
   }
-  pdb_mode() {
+  pdb_mode() { # Adds most frequent ProtonDB rating to fragments
     grep -L LINUX -- /var/tmp/Steamy_Cats/fragments/* |\
       grep -oP '[0-9]+$' | sed -e 's/$/,/' -e 's/^/ /' \
       > /var/tmp/Steamy_Cats/nolinux
@@ -277,7 +277,7 @@ make_categories() {
       '!seen[$1] {printf "\t\t\t\t\t\t\t\"301\"\t\t\"PDB MODE %s\"\n",
       $2 >> "/var/tmp/Steamy_Cats/fragments/"$1;seen[$1]=1}'
   }
-  pdb_unrated() {
+  pdb_unrated() { # Labels games as having no ProtonDB ratings
     local which_game
 
     while read -r which_game ; do
@@ -300,7 +300,7 @@ make_categories() {
   store_flags || oops "Steam store flags failed"
   finalize_fragments || oops "Our config did not finalize"
 }
-timer() {
+timer() { # Timer function for debug and profiling
   if [ "$1" == "start" ] ; then
     time_start="$(date +"%s")"
     return
@@ -309,10 +309,10 @@ timer() {
   let cur_time=$(date +"%s")-$time_start
   echo "$1 took $cur_time seconds"
 }
-download_proton_db() {
+download_proton_db() { # Gets ProtonDB dumps from GitHub, makes PDB.counted
   local tar_filename pdbloc="$HOME/.local/share/protondb-data/"
 
-  check_pdb() {
+  check_pdb() { # Downloads PDB from GitHub if not present
     if [ ! -d "$pdbloc" ] ; then
       cd "$HOME"/.local/share/ || oops ".local/share does not exist, exiting"
       echo "Downloading Proton DB Info using Git"
@@ -346,7 +346,7 @@ download_proton_db() {
     uniq -c | sort -nr > /var/tmp/Steamy_Cats/PDB.counted \
     || oops Failed to make PDB.counted
 }
-category_list() {
+category_list() { # Lists all categories, for adding to exclude/include
   mkdir -p ~/.config/Steamy_Cats/
   echo "# List of all categories that games are assigned"
   echo "# To skip over unwanted categories, save category names to ~/.config/Steamy_Cats/exclude.conf"
@@ -354,8 +354,8 @@ category_list() {
   echo "# Lines with comments will be ignored."
   grep -P $'\t\t\t\t\t\t\t\"\d*\"\t\t\"(?!favorite)' /var/tmp/newconfig.vdf |\
     cut -d\" -f4 | sort -u
-}
-check_valid() {
+} 
+check_valid() { # Basic check to know if the config is valid
   local brackets
   brackets="$(tr -cd '{}' < "$1" | sed ':loop;s/{}//g;t loop')"
   quotes="$(tr -cd '"' < "$1" | sed 's/""//g')"
@@ -367,7 +367,7 @@ check_valid() {
     oops "Configuration file $1 invalid"
   fi
 }
-assemble_steam_config() {
+assemble_steam_config() { # Adds fragments and original config together
   local apps_begin apps_end hidden is_hidden
   echo "Creating final configuration"
 
@@ -446,7 +446,7 @@ helpoutput() {
   Usage: --exclude-file=\$FILENAME
     Shell Variable: EXCLUDE_FILE"
 }
-find_config() {
+find_config() { # Identifies the Steam USERID and VDF file to parse
   local listnum steam_account_name user_names
 
   user_names="$(grep PersonaName \
@@ -577,7 +577,7 @@ parse_args() {
   done
 }
 oops() {
-  echo "Exit Code: $? ~~ Last Command: $this_command"
+  echo "Exit Code: $? ~~ Command before oops: $this_command"
   tput bold
   echo "$@"
   tput sgr0
@@ -601,17 +601,19 @@ main() {
   parse_args "$@" || oops Arguments invalid
   find_config || oops Could not find config
 
-  echo "Our config file is: $USER_VDF"
+  {
+    echo "Our config file is: $USER_VDF"
 
-  check_valid "$USER_VDF" ||\
-    oops "The configuration at $USER_VDF fails validation"
+    check_valid "$USER_VDF" ||\
+      oops "The configuration at $USER_VDF fails validation"
 
-  cp "$USER_VDF" /var/tmp/oldconfig.vdf || oops Config not found
+    cp "$USER_VDF" /var/tmp/oldconfig.vdf || oops Config not found
 
-  if [ ! -f "$USER_VDF"~ ] ; then
-    echo "Copying original config to $USER_VDF~"
-    cp "$USER_VDF" "$USER_VDF"~ || oops Could not copy config
-  fi
+    if [ ! -f "$USER_VDF"~ ] ; then
+      echo "Copying original config to $USER_VDF~"
+      cp "$USER_VDF" "$USER_VDF"~ || oops Could not copy config
+    fi
+  }
 
   parse_config "$USER_VDF" || oops Parsing config failed
   download_store || oops Downloading store details failed
