@@ -202,7 +202,7 @@ make_categories() {
     grep -m1 -H '<div class="game_area_purchase_platform">' -- * |\
       grep '<span class="platform_img linux">' | cut -d. -f1 >> /var/tmp/Steamy_Cats/Linux
     curl -s https://raw.githubusercontent.com/SteamDatabase/SteamLinux/master/GAMES.json |\
-      cut -d\" -f2 "$HOME"/.local/share/SteamLinux.json | grep '[0-9]' >> /var/tmp/Steamy_Cats/Linux
+      cut -d\" -f2 | grep '[0-9]' >> /var/tmp/Steamy_Cats/Linux
 
     while read -r which_game ; do
       if [ -f /var/tmp/Steamy_Cats/fragments/"$which_game" ] ; then
