@@ -76,7 +76,8 @@ parse_config() {
 
     awk '/^\t\t\t\t\t"[0-9]+"$/ {split($0,a,"\"");
     print > "/var/tmp/Steamy_Cats/fragments/"a[2];next}
-    {print >> "/var/tmp/Steamy_Cats/fragments/"a[2]}' <<< "$apps_section"
+    {print >> "/var/tmp/Steamy_Cats/fragments/"a[2]}
+    {close("/var/tmp/Steamy_Cats/fragments/"a[2])}' <<< "$apps_section"
 
     check_tags="$(cd /var/tmp/Steamy_Cats/fragments/ &&\
       grep -L $'\t\t\t\t\t\"tags\"' -- *)"
