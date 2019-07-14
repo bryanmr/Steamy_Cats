@@ -6,6 +6,8 @@ Run the script and select a user. You may also run with --help to see more optio
 Requires jq, Steam, and other common utilities to be installed. This script assumes Steam is located in the ~/.steam/ folder and has not been setup with Flatpaks, yet.
 ## Installation
 Just download the Steamy_Cats script and run it.
+
+For more help, check out this [Steamy Cats article on Addictive Tips](https://www.addictivetips.com/ubuntu-linux-tips/categorize-steam-games-on-linux-with-steamycats/)
 ## Help Output
 ```
 Steamy Cats is a script to categorize and organize Steam games
