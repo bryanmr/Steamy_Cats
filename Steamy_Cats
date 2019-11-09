@@ -635,6 +635,8 @@ main() {
   echo "Original config backed up to $USER_VDF~"
   echo "New config written. To apply, run the below command:"
   echo "cp /var/tmp/newconfig.vdf $USER_VDF"
+  echo "Once copied, open the following page in a browser:"
+  echo "steam://resetcollections"
 }
 
 main "$@"
