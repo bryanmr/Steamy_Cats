@@ -1,8 +1,7 @@
 # Steamy Cats
 A Steam Game Category Sorter Written in Bash. This script will output the user tags, review score, release year, store flags, [Proton DB](https://www.protondb.com/) scores, and if a game is Linux native to a new Steam Configuration file.
 
-Run the script and select a user. You may also run with --help to see more options. Once the script completes, you have to refresh the collection with the new libary interface. Load the following page:
-[steam://resetcollections](steam://resetcollections)
+Run the script and select a user. You may also run with --help to see more options. Once the script completes, you have to refresh the collection with the new libary interface. Load the following page: [steam://resetcollections](steam://resetcollections)
 
 Requires jq, Steam, and other common utilities to be installed. This script assumes Steam is located in the ~/.steam/ folder and has not been setup with Flatpaks, yet.
 ## Installation
