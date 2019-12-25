@@ -1,3 +1,8 @@
+# Status
+This project doesn't currently work due to changes in how ProtonDB publishes their information. It is no longer useful and the tags and flags I was doing before are no longer useful.
+
+Basically, this project can't do what it was intended to do without rethinking everything.
+
 # Steamy Cats
 A Steam Game Category Sorter Written in Bash. This script will output the user tags, review score, release year, store flags, [Proton DB](https://www.protondb.com/) scores, and if a game is Linux native to a new Steam Configuration file.
 
