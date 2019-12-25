@@ -59,20 +59,22 @@ parse_config() {
       # Requires pgrep with lookahead support to preserve favorites
       apps_section=$(awk '/^\t\t\t\t\t}$/{next}
       /^\t\t\t\t\t\t}$/{next}
-      /^\t\t\t\t"Apps"$/{f=1;next}
+      /^\t\t\t\t"[Aa]pps"$/{f=1;next}
       f&&/^\t\t\t\t\t"[0-9]+"$/{n=1;print;next}
       n&&/^\t\t\t\t}$/{n=0;f=0} ; n' "$1" |\
-        grep -Pv $'\t\t\t\t\t\t\t\"\d*\"\t\t\"(?!favorite)')
+        grep -Pv $'\t\t\t\t\t\t\t\"\d*\"\t\t\"(?!favorite)' 2> /var/tmp/Steamy_Cats/error.log)
     else
       # We are removing categories we create here
       apps_section=$(awk '/^\t\t\t\t\t}$/{next}
       /^\t\t\t\t\t\t}$/{next}
-      /^\t\t\t\t"Apps"$/{f=1;next}
+      /^\t\t\t\t"[Aa]pps"$/{f=1;next}
       f&&/^\t\t\t\t\t"[0-9]+"$/{n=1;print;next}
       n&&/^\t\t\t\t}$/{n=0;f=0} ; n' "$1" |\
         grep -v -e '"TAGS ' -e '"SFLAGS ' \
-        -e '"APP ' -e '"PDB ' -e '"RELEASE ' -e '"REVIEW ')
+        -e '"APP ' -e '"PDB ' -e '"RELEASE ' -e '"REVIEW ' 2> /var/tmp/Steamy_Cats/error.log)
     fi
+
+    : ${apps_section:?No value set for apps_section variable, exiting}
 
     awk '/^\t\t\t\t\t"[0-9]+"$/ {split($0,a,"\"");
     print > "/var/tmp/Steamy_Cats/fragments/"a[2];next}
@@ -386,9 +388,9 @@ assemble_steam_config() {
   fi
   grep -L $'\t\t\t\t\t\t"Hidden"' -- * | xargs cat >> /var/tmp/Steamy_Cats/hidden_managed
 
-  let apps_begin=$(grep -n \"Apps\" "$1" | cut -d: -f1)+1
+  let apps_begin=$(grep -n \"[Aa]pps\" "$1" | cut -d: -f1)+1
 
-  let apps_end=$(awk '/^\t\t\t\t"Apps"$/{f=1;next} f&&/^\t\t\t\t}$/{print NR;f=0}' "$1")
+  let apps_end=$(awk '/^\t\t\t\t"[Aa]pps"$/{f=1;next} f&&/^\t\t\t\t}$/{print NR;f=0}' "$1")
 
   # Attaching the top of the config
   head -n"$apps_begin" "$1" > /var/tmp/newconfig.vdf
